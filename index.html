@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#7b3f5b">
+  <title>Petal & Vine | Flower Shop</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="script.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#" onclick="return false">🌸 <span id="brandName">Petal & Vine</span></a>
+    <div class="top-actions">
+      <span id="sessionLabel" class="session-label"></span>
+      <button id="logoutBtn" class="btn btn-outline hidden" type="button" onclick="logout()">Log out</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="authPage" class="auth-wrap">
+      <div class="auth-card">
+        <div class="auth-logo">🌷</div>
+        <p class="eyebrow">FRESH FLOWERS, THOUGHTFULLY ARRANGED</p>
+        <h1 id="authTitle">Welcome back</h1>
+        <p class="muted" id="authSubtitle">Log in to continue to Petal & Vine.</p>
+
+        <form id="loginForm" class="form-stack">
+          <label>Username<input id="loginUsername" autocomplete="username" required></label>
+          <label>Password<input id="loginPassword" type="password" autocomplete="current-password" required></label>
+          <button class="btn btn-primary full" type="submit">Log in</button>
+        </form>
+
+        <form id="registerForm" class="form-stack hidden">
+          <label>Full name<input id="registerName" required maxlength="60"></label>
+          <label>Username<input id="registerUsername" required minlength="3" maxlength="24" autocomplete="username"></label>
+          <label>Password<input id="registerPassword" type="password" required minlength="4" autocomplete="new-password"></label>
+          <label>Confirm password<input id="registerConfirm" type="password" required minlength="4" autocomplete="new-password"></label>
+          <button class="btn btn-primary full" type="submit">Create account</button>
+        </form>
+
+        <p class="auth-switch" id="authSwitch">Don't have an account? <button type="button" class="text-btn" onclick="showAuthForm('register')">Create one</button></p>
+        <p class="tiny muted">Demo admin: <b>admin</b> / <b>admin123</b></p>
+      </div>
+    </section>
+
+    <section id="appPage" class="app-shell hidden">
+      <aside class="sidebar">
+        <div class="side-heading">MENU</div>
+
+        <nav id="customerNav" class="nav-list">
+          <button class="nav-btn active" data-page="shopPage" onclick="showPage('shopPage')">🌼 Shop</button>
+          <button class="nav-btn" data-page="cartPage" onclick="showPage('cartPage')">🛒 My Cart <span id="cartCount" class="count">0</span></button>
+          <button class="nav-btn" data-page="myOrdersPage" onclick="showPage('myOrdersPage')">📦 My Orders</button>
+        </nav>
+
+        <div id="adminNav" class="hidden">
+          <div class="side-heading admin-heading">ADMINISTRATION</div>
+          <nav class="nav-list">
+            <button class="nav-btn" data-page="dashboardPage" onclick="showPage('dashboardPage')">▦ Overview</button>
+            <button class="nav-btn" data-page="productsPage" onclick="showPage('productsPage')">🌹 Products</button>
+            <button class="nav-btn" data-page="inventoryPage" onclick="showPage('inventoryPage')">📋 Inventory</button>
+            <button class="nav-btn" data-page="ordersPage" onclick="showPage('ordersPage')">🧾 Customer Orders</button>
+            <button class="nav-btn" data-page="usersPage" onclick="showPage('usersPage')">👥 User Management</button>
+            <button class="nav-btn" data-page="transactionsPage" onclick="showPage('transactionsPage')">💳 Transactions</button>
+            <button class="nav-btn" data-page="settingsPage" onclick="showPage('settingsPage')">⚙️ Settings</button>
+          </nav>
+        </div>
+
+        <div class="sidebar-bottom">
+          <span class="tiny muted">Petal & Vine</span>
+          <span class="tiny muted">Flower Shop System</span>
+        </div>
+      </aside>
+
+      <div class="content-area">
+        <section id="shopPage" class="page">
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">BLOOM INTO SOMETHING BEAUTIFUL</p>
+              <h1>Our Flower Collection</h1>
+              <p class="muted">Choose your favorite blooms and let us make someone's day.</p>
+            </div>
+            <div class="search-wrap">
+              <input id="productSearch" placeholder="Search flowers..." oninput="renderProducts()">
+            </div>
+          </div>
+          <div id="shopProducts" class="product-grid"></div>
+        </section>
+
+        <section id="cartPage" class="page hidden">
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">READY WHEN YOU ARE</p>
+              <h1>My Cart</h1>
+              <p class="muted">Review your selected flowers before checkout.</p>
+            </div>
+          </div>
+          <div id="cartContent"></div>
+        </section>
+
+        <section id="myOrdersPage" class="page hidden">
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">YOUR PURCHASES</p>
+              <h1>My Orders</h1>
+              <p class="muted">Track your orders and view receipts.</p>
+            </div>
+          </div>
+          <div id="customerOrders"></div>
+        </section>
+
+        <section id="dashboardPage" class="page hidden">
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">STORE MANAGEMENT</p>
+              <h1>Admin Overview</h1>
+              <p class="muted">A quick look at your flower shop.</p>
+            </div>
+          </div>
+          <div id="dashboardStats" class="stats-grid"></div>
+          <div class="panel"><h2>Recent customer orders</h2><div id="recentOrders"></div></div>
+        </section>
+
+        <section id="productsPage" class="page hidden">
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">CATALOG MANAGEMENT</p>
+              <h1>Products</h1>
+              <p class="muted">Add, edit, or delete flower products.</p>
+            </div>
+            <button class="btn btn-primary" onclick="openProductForm()">＋ Add product</button>
+          </div>
+
+          <div id="productFormPanel" class="panel hidden">
+            <div class="panel-title">
+              <h2 id="productFormTitle">Add product</h2>
+              <button class="icon-btn" onclick="closeProductForm()">✕</button>
+            </div>
+            <form id="productForm" class="form-grid">
+              <input id="productId" type="hidden">
+              <label>Product name<input id="productName" required maxlength="70"></label>
+              <label>Category<input id="productCategory" required placeholder="Bouquet, Roses, etc."></label>
+              <label>Price (₱)<input id="productPrice" type="number" min="1" step="0.01" required></label>
+              <label>Stock quantity<input id="productStock" type="number" min="0" step="1" required></label>
+              <label class="wide">Description<textarea id="productDescription" rows="3"></textarea></label>
+              <label class="wide">Product picture<input id="productImage" type="file" accept="image/*"><span class="tiny muted">Optional. Upload JPG, PNG, or WEBP.</span></label>
+              <div class="wide form-actions">
+                <button class="btn btn-primary" type="submit">Save product</button>
+                <button class="btn btn-outline" type="button" onclick="closeProductForm()">Cancel</button>
+              </div>
+            </form>
+          </div>
+
+          <div class="panel">
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Product</th><th>Category</th><th>Price</th><th>Stock</th><th>Status</th><th>Actions</th></tr></thead>
+                <tbody id="adminProductsTable"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section id="inventoryPage" class="page hidden">
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">STOCK CONTROL</p>
+              <h1>Inventory</h1>
+              <p class="muted">Monitor available flower stock.</p>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Product</th><th>Category</th><th>Current stock</th><th>Stock status</th><th>Update stock</th></tr></thead>
+                <tbody id="inventoryTable"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section id="ordersPage" class="page hidden">
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">FULFILLMENT</p>
+              <h1>Customer Orders</h1>
+              <p class="muted">Review orders and update their status.</p>
+            </div>
+          </div>
+          <div id="adminOrders"></div>
+        </section>
+
+        <section id="usersPage" class="page hidden">
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">ACCOUNT CONTROL</p>
+              <h1>User Management</h1>
+              <p class="muted">View customer accounts and manage access.</p>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Account status</th><th>Action</th></tr></thead>
+                <tbody id="usersTable"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section id="transactionsPage" class="page hidden">
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">PAYMENT RECORDS</p>
+              <h1>Transactions</h1>
+              <p class="muted">Payment methods and transaction statuses for customer orders.</p>
+            </div>
+          </div>
+          <div id="transactionsContent"></div>
+        </section>
+
+        <section id="settingsPage" class="page hidden">
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">PERSONALIZE YOUR STORE</p>
+              <h1>Settings</h1>
+              <p class="muted">Update the shop and administrator details.</p>
+            </div>
+          </div>
+          <div class="panel settings-panel">
+            <form id="settingsForm" class="form-stack">
+              <label>Shop name<input id="settingShopName" required></label>
+              <label>Admin display name<input id="settingAdminName" required></label>
+              <label>New admin password <span class="tiny muted">(leave blank to keep current password)</span><input id="settingAdminPassword" type="password" minlength="4"></label>
+              <button class="btn btn-primary" type="submit">Save settings</button>
+            </form>
+            <p class="tiny muted">This demo stores information in this browser only. It is not a secure production payment or authentication system.</p>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <div id="checkoutModal" class="modal hidden">
+    <div class="modal-card">
+      <div class="panel-title">
+        <div><p class="eyebrow">ORDER DETAILS</p><h2>Checkout</h2></div>
+        <button class="icon-btn" onclick="closeCheckout()">✕</button>
+      </div>
+      <form id="checkoutForm" class="form-stack">
+        <div id="checkoutSummary" class="checkout-summary"></div>
+        <label>Full name<input id="checkoutName" required></label>
+        <label>Contact number<input id="checkoutPhone" required type="tel"></label>
+        <label>Delivery address<textarea id="checkoutAddress" required rows="2"></textarea></label>
+        <label>Payment method
+          <select id="paymentMethod" required>
+            <option value="Cash on Delivery">Cash on Delivery</option>
+            <option value="GCash">GCash</option>
+            <option value="Bank Transfer">Bank Transfer</option>
+          </select>
+        </label>
+        <label id="paymentReferenceWrap" class="hidden">Payment reference / account details<input id="paymentReference" placeholder="Enter reference number if available"></label>
+        <button class="btn btn-primary full" type="submit">Place order</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="receiptModal" class="modal hidden">
+    <div class="modal-card receipt-card">
+      <div class="panel-title no-print">
+        <h2>Order receipt</h2>
+        <button class="icon-btn" onclick="closeReceipt()">✕</button>
+      </div>
+      <div id="receiptContent"></div>
+      <div class="form-actions no-print">
+        <button class="btn btn-primary" onclick="window.print()">Print receipt</button>
+        <button class="btn btn-outline" onclick="closeReceipt()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden" role="status"></div>
+</body>
+</html>
