@@ -1,0 +1,258 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#7b3f5b">
+  <title>Petal & Vine | Flower Shop</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="script.js" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="#" data-page="shop">
+      <span class="brand-mark">✿</span>
+      <span>Petal <i>&</i> Vine<small>FLOWER SHOP</small></span>
+    </a>
+
+    <nav id="customerNav" class="customer-nav">
+      <button class="nav-link active" data-page="shop">Shop</button>
+      <button class="nav-link" data-page="orders">My Orders</button>
+      <button class="nav-link" data-page="about">About</button>
+      <button class="nav-link" data-page="cart">Cart <span id="cartCount" class="count">0</span></button>
+    </nav>
+
+    <div class="header-actions">
+      <span id="welcomeUser" class="welcome-user"></span>
+      <button id="accountButton" class="button button-light">Login</button>
+      <button id="adminOpenButton" class="button button-dark">Admin</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="shopPage" class="page active">
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">FLOWERS FOR EVERY MOMENT</p>
+          <h1>Say it beautifully<br><em>with flowers.</em></h1>
+          <p>Thoughtfully arranged blooms to make ordinary days feel special.</p>
+          <button class="button button-dark" data-scroll-products>Explore our flowers</button>
+        </div>
+        <div class="hero-art">
+          <span>✿</span><span>❀</span><span>✾</span>
+        </div>
+      </section>
+
+      <section class="section-wrap" id="productsSection">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">OUR COLLECTION</p>
+            <h2>Fresh picks for you</h2>
+          </div>
+          <input id="productSearch" class="search-input" type="search" placeholder="Search flowers...">
+        </div>
+        <div id="shopProducts" class="product-grid"></div>
+        <p id="emptyProducts" class="empty-state hidden">No products found.</p>
+      </section>
+    </section>
+
+    <section id="cartPage" class="page section-wrap">
+      <div class="section-heading">
+        <div><p class="eyebrow">YOUR SELECTION</p><h2>Shopping cart</h2></div>
+      </div>
+      <div id="cartItems"></div>
+      <div id="cartSummary" class="cart-summary hidden"></div>
+    </section>
+
+    <section id="ordersPage" class="page section-wrap">
+      <p class="eyebrow">ORDER TRACKING</p>
+      <h2>My orders</h2>
+      <div id="customerOrders"></div>
+    </section>
+
+    <section id="aboutPage" class="page section-wrap about-page">
+      <p class="eyebrow">A LITTLE ABOUT US</p>
+      <h2>Flowers that speak from the heart.</h2>
+      <p>Petal & Vine brings people closer through thoughtful floral arrangements. Whether it is a celebration, a thank-you, or a simple reminder that someone matters, we believe flowers make every message more meaningful.</p>
+    </section>
+
+    <section id="loginPage" class="page auth-page">
+      <form id="loginForm" class="auth-card">
+        <p class="eyebrow">WELCOME BACK</p>
+        <h2>Login</h2>
+        <label>Email or username
+          <input id="loginIdentity" required autocomplete="username">
+        </label>
+        <label>Password
+          <div class="password-wrap">
+            <input id="loginPassword" type="password" required autocomplete="current-password">
+            <button type="button" class="eye-button" data-toggle-password="loginPassword">◉</button>
+          </div>
+        </label>
+        <button class="button button-dark full-width" type="submit">Login</button>
+        <p class="auth-switch">Don't have an account? <button type="button" class="text-button" id="showRegister">Create one</button></p>
+        <p class="auth-switch"><button type="button" class="text-button" data-page="shop">Back to shop</button></p>
+      </form>
+
+      <form id="registerForm" class="auth-card hidden">
+        <p class="eyebrow">JOIN OUR COMMUNITY</p>
+        <h2>Create account</h2>
+        <label>Full name<input id="registerName" required maxlength="70"></label>
+        <label>Email<input id="registerEmail" type="email" required></label>
+        <label>Password
+          <div class="password-wrap">
+            <input id="registerPassword" type="password" minlength="6" required>
+            <button type="button" class="eye-button" data-toggle-password="registerPassword">◉</button>
+          </div>
+        </label>
+        <button class="button button-dark full-width" type="submit">Create account</button>
+        <p class="auth-switch">Already registered? <button type="button" class="text-button" id="showLogin">Login</button></p>
+      </form>
+    </section>
+
+    <section id="adminPage" class="page admin-layout">
+      <aside class="admin-sidebar">
+        <p class="eyebrow">PETAL & VINE</p>
+        <h2>Admin panel</h2>
+
+        <!-- Each admin section appears only once -->
+        <nav id="adminNav" class="admin-nav">
+          <button class="admin-nav-link active" data-admin-section="overview">Overview</button>
+          <button class="admin-nav-link" data-admin-section="products">Products / CRUD</button>
+          <button class="admin-nav-link" data-admin-section="orders">Orders</button>
+          <button class="admin-nav-link" data-admin-section="customers">Customers</button>
+          <button class="admin-nav-link" data-admin-section="receipts">Receipts</button>
+          <button class="admin-nav-link" data-admin-section="settings">Settings</button>
+        </nav>
+
+        <button id="adminLogout" class="button button-light full-width">Logout</button>
+      </aside>
+
+      <div class="admin-content">
+        <section id="adminOverview" class="admin-section active">
+          <p class="eyebrow">STORE SUMMARY</p>
+          <h2>Overview</h2>
+          <div id="overviewStats" class="stats-grid"></div>
+          <div class="panel">
+            <h3>Recent orders</h3>
+            <div id="recentOrders"></div>
+          </div>
+        </section>
+
+        <section id="adminProducts" class="admin-section">
+          <p class="eyebrow">INVENTORY MANAGEMENT</p>
+          <h2>Products / CRUD</h2>
+          <div class="panel">
+            <div class="section-heading">
+              <h3>Product inventory</h3>
+              <input id="adminProductSearch" class="search-input" placeholder="Find a product">
+            </div>
+            <div id="adminProductList"></div>
+          </div>
+
+          <form id="productForm" class="panel editor-grid">
+            <h3 id="productFormTitle" class="span-all">Add a product</h3>
+            <input id="editProductId" type="hidden">
+            <label>Product name<input id="productName" required maxlength="80"></label>
+            <label>Price (₱)<input id="productPrice" type="number" min="1" step="0.01" required></label>
+            <label>Stock quantity<input id="productStock" type="number" min="0" step="1" required></label>
+            <label>Category<input id="productCategory" placeholder="Bouquet, Roses..." required></label>
+            <label class="span-all">Description<textarea id="productDescription" rows="3"></textarea></label>
+            <label class="span-all">Product picture
+              <input id="productImage" type="file" accept="image/*">
+              <small>Optional. Maximum image size: 1.5 MB.</small>
+            </label>
+            <img id="imagePreview" class="image-preview hidden" alt="Product preview">
+            <div class="form-actions span-all">
+              <button class="button button-dark" type="submit" id="saveProductButton">Add product</button>
+              <button class="button button-light" type="button" id="cancelProductEdit">Clear</button>
+            </div>
+          </form>
+        </section>
+
+        <section id="adminOrders" class="admin-section">
+          <p class="eyebrow">FULFILLMENT</p>
+          <h2>Orders</h2>
+          <div id="adminOrderList"></div>
+        </section>
+
+        <section id="adminCustomers" class="admin-section">
+          <p class="eyebrow">CUSTOMER DIRECTORY</p>
+          <h2>Customers</h2>
+          <div id="adminCustomerList"></div>
+        </section>
+
+        <section id="adminReceipts" class="admin-section">
+          <p class="eyebrow">PAYMENT RECORDS</p>
+          <h2>Receipts</h2>
+          <div id="receiptList"></div>
+        </section>
+
+        <section id="adminSettings" class="admin-section">
+          <p class="eyebrow">STORE PREFERENCES</p>
+          <h2>Settings</h2>
+          <form id="settingsForm" class="panel settings-form">
+            <h3>Store details</h3>
+            <label>Store name<input id="settingStoreName" required></label>
+            <label>Admin display name<input id="settingAdminName" required></label>
+            <label>Contact email<input id="settingContactEmail" type="email"></label>
+            <button class="button button-dark" type="submit">Save settings</button>
+          </form>
+
+          <form id="adminPasswordForm" class="panel settings-form">
+            <h3>Change admin password</h3>
+            <label>Current password
+              <div class="password-wrap">
+                <input id="currentAdminPassword" type="password" required>
+                <button type="button" class="eye-button" data-toggle-password="currentAdminPassword">◉</button>
+              </div>
+            </label>
+            <label>New password
+              <div class="password-wrap">
+                <input id="newAdminPassword" type="password" minlength="8" required>
+                <button type="button" class="eye-button" data-toggle-password="newAdminPassword">◉</button>
+              </div>
+            </label>
+            <label>Confirm new password<input id="confirmAdminPassword" type="password" minlength="8" required></label>
+            <button class="button button-dark" type="submit">Update password</button>
+          </form>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <footer><span>✿ Petal & Vine</span><small>Made with care, one bloom at a time.</small></footer>
+
+  <dialog id="checkoutDialog" class="modal">
+    <form id="checkoutForm" method="dialog" class="modal-card">
+      <button type="button" class="modal-close" data-close-dialog="checkoutDialog">×</button>
+      <p class="eyebrow">ALMOST THERE</p><h2>Checkout</h2>
+      <label>Full name<input id="checkoutName" required></label>
+      <label>Contact number<input id="checkoutPhone" type="tel" required></label>
+      <label>Delivery address<textarea id="checkoutAddress" rows="3" required></textarea></label>
+      <label>Order notes (optional)<textarea id="checkoutNotes" rows="2"></textarea></label>
+      <div class="payment-note"><strong>Payment method: Cash on Delivery (COD)</strong><small>Pay in cash when your order is delivered.</small></div>
+      <button class="button button-dark full-width" type="submit">Place order</button>
+    </form>
+  </dialog>
+
+  <dialog id="adminSetupDialog" class="modal">
+    <form id="adminSetupForm" method="dialog" class="modal-card">
+      <p class="eyebrow">FIRST-TIME SETUP</p><h2>Create admin access</h2>
+      <p>Create your own private administrator password. No default password is provided.</p>
+      <label>Admin display name<input id="setupAdminName" required value="Administrator"></label>
+      <label>Choose password
+        <div class="password-wrap">
+          <input id="setupAdminPassword" type="password" minlength="8" required>
+          <button type="button" class="eye-button" data-toggle-password="setupAdminPassword">◉</button>
+        </div>
+      </label>
+      <label>Confirm password<input id="setupAdminConfirm" type="password" minlength="8" required></label>
+      <button class="button button-dark full-width" type="submit">Create admin password</button>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
