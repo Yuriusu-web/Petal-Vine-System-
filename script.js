@@ -220,10 +220,99 @@ function createDefaultProducts() {
       stock: 9,
       image: "💮",
       description: "A garden-inspired flower arrangement."
+    },
+    {
+      id: makeId("P"),
+      name: "White Lily Bouquet",
+      category: "Lilies",
+      price: 1350,
+      stock: 12,
+      image: "🤍",
+      description: "Elegant white lilies for meaningful occasions."
+    },
+    {
+      id: makeId("P"),
+      name: "Blue Hydrangea Bouquet",
+      category: "Hydrangeas",
+      price: 1450,
+      stock: 8,
+      image: "💠",
+      description: "Beautiful blue blooms for a thoughtful gift."
+    },
+    {
+      id: makeId("P"),
+      name: "Purple Orchid Arrangement",
+      category: "Orchids",
+      price: 1550,
+      stock: 10,
+      image: "🪻",
+      description: "Graceful purple orchids for elegant celebrations."
+    },
+    {
+      id: makeId("P"),
+      name: "White Daisy Bouquet",
+      category: "Daisies",
+      price: 650,
+      stock: 20,
+      image: "🌼",
+      description: "Fresh and cheerful white daisies."
+    },
+    {
+      id: makeId("P"),
+      name: "Carnation Love Bouquet",
+      category: "Carnations",
+      price: 780,
+      stock: 15,
+      image: "🌺",
+      description: "Lovely carnations perfect for showing appreciation."
+    },
+    {
+      id: makeId("P"),
+      name: "Peach Rose Bouquet",
+      category: "Roses",
+      price: 1050,
+      stock: 12,
+      image: "🌹",
+      description: "Warm peach roses for sweet and thoughtful gifts."
+    },
+    {
+      id: makeId("P"),
+      name: "Lavender Dream Bouquet",
+      category: "Lavender",
+      price: 1150,
+      stock: 10,
+      image: "💜",
+      description: "A dreamy lavender-inspired floral arrangement."
+    },
+    {
+      id: makeId("P"),
+      name: "Pink Peony Bouquet",
+      category: "Peonies",
+      price: 1650,
+      stock: 7,
+      image: "🌸",
+      description: "Romantic pink peonies with soft, full blooms."
+    },
+    {
+      id: makeId("P"),
+      name: "Orange Gerbera Bouquet",
+      category: "Gerberas",
+      price: 890,
+      stock: 14,
+      image: "🌼",
+      description: "Bright orange gerberas for happy celebrations."
+    },
+    {
+      id: makeId("P"),
+      name: "Luxury Mixed Roses",
+      category: "Mixed Bouquets",
+      price: 1850,
+      stock: 6,
+      image: "💐",
+      description: "A luxurious arrangement of assorted colorful roses."
     }
   ];
 }
-
 /* ==========================================
    AUTHENTICATION
 ========================================== */
