@@ -1,0 +1,159 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#7b3f5b">
+  <title>Petal & Vine | Flower Shop</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="script.js" defer></script>
+</head>
+<body>
+
+<header class="topbar">
+  <a class="brand" href="#" onclick="return false;">
+    <span class="brand-icon">✿</span>
+    <span>Petal & Vine</span>
+  </a>
+  <div class="header-right">
+    <span id="headerUser">Welcome</span>
+    <button id="logoutBtn" class="btn-outline hidden" onclick="logout()">Logout</button>
+  </div>
+</header>
+
+<main id="authScreen" class="auth-wrapper">
+  <section class="auth-card">
+    <div class="auth-logo">✿</div>
+    <h1>Petal & Vine</h1>
+    <p class="muted">Flowers for every beautiful moment.</p>
+
+    <div id="loginPanel">
+      <h2>Welcome Back</h2>
+      <form id="loginForm">
+        <label for="loginUsername">Username</label>
+        <input id="loginUsername" type="text" placeholder="Enter your username" autocomplete="username" required>
+
+        <label for="loginPassword">Password</label>
+        <input id="loginPassword" type="password" placeholder="Enter your password" autocomplete="current-password" required>
+
+        <button class="btn-primary full-width" type="submit">Login</button>
+      </form>
+      <p class="auth-switch">Don't have an account?
+        <button class="text-button" onclick="showRegister()">Create Account</button>
+      </p>
+      <p class="admin-hint">Demo admin: admin / admin123</p>
+    </div>
+
+    <div id="registerPanel" class="hidden">
+      <h2>Create Account</h2>
+      <form id="registerForm">
+        <label for="registerName">Full Name</label>
+        <input id="registerName" type="text" placeholder="Your full name" required>
+
+        <label for="registerUsername">Username</label>
+        <input id="registerUsername" type="text" placeholder="Create a username" autocomplete="username" required>
+
+        <label for="registerPassword">Password</label>
+        <input id="registerPassword" type="password" placeholder="Create a password" minlength="4" required>
+
+        <label for="confirmPassword">Confirm Password</label>
+        <input id="confirmPassword" type="password" placeholder="Confirm your password" required>
+
+        <button class="btn-primary full-width" type="submit">Create Account</button>
+      </form>
+      <p class="auth-switch">Already have an account?
+        <button class="text-button" onclick="showLogin()">Login</button>
+      </p>
+    </div>
+  </section>
+</main>
+
+<div id="appScreen" class="hidden">
+  <div class="app-layout">
+    <aside class="sidebar">
+      <div class="sidebar-profile">
+        <div class="profile-icon">✿</div>
+        <div>
+          <strong id="sidebarName">User</strong>
+          <small id="sidebarRole">Customer</small>
+        </div>
+      </div>
+      <nav id="navigation" class="navigation"></nav>
+    </aside>
+
+    <main class="content-area">
+      <div id="pageContent"></div>
+    </main>
+  </div>
+</div>
+
+<div id="productModal" class="modal hidden">
+  <div class="modal-content">
+    <button class="modal-close" onclick="closeProductModal()">×</button>
+    <h2 id="productModalTitle">Add Product</h2>
+    <form id="productForm">
+      <input type="hidden" id="productId">
+
+      <label>Product Name</label>
+      <input id="productName" required>
+
+      <label>Category</label>
+      <input id="productCategory" placeholder="Bouquet, Roses, etc." required>
+
+      <label>Description</label>
+      <textarea id="productDescription" rows="3"></textarea>
+
+      <label>Price (₱)</label>
+      <input id="productPrice" type="number" min="0" step="0.01" required>
+
+      <label>Stock Quantity</label>
+      <input id="productStock" type="number" min="0" step="1" required>
+
+      <label>Product Image</label>
+      <input id="productImage" type="file" accept="image/*">
+      <img id="imagePreview" class="image-preview hidden" alt="Preview">
+
+      <div class="form-actions">
+        <button type="button" class="btn-outline" onclick="closeProductModal()">Cancel</button>
+        <button type="submit" class="btn-primary">Save Product</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="checkoutModal" class="modal hidden">
+  <div class="modal-content">
+    <button class="modal-close" onclick="closeCheckout()">×</button>
+    <h2>Checkout</h2>
+    <div id="checkoutSummary"></div>
+    <form id="checkoutForm">
+      <label>Customer Name</label>
+      <input id="checkoutName" required>
+
+      <label>Contact Number</label>
+      <input id="checkoutPhone" type="tel" required>
+
+      <label>Delivery Address</label>
+      <textarea id="checkoutAddress" rows="3" required></textarea>
+
+      <label>Payment Method</label>
+      <input value="Cash on Delivery (COD)" readonly>
+
+      <button class="btn-primary full-width" type="submit">Place Order</button>
+    </form>
+  </div>
+</div>
+
+<div id="receiptModal" class="modal hidden">
+  <div class="modal-content receipt-modal">
+    <button class="modal-close" onclick="closeReceipt()">×</button>
+    <div id="receiptContent"></div>
+    <button class="btn-primary full-width" onclick="window.print()">Print Receipt</button>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+</body>
+</html>
