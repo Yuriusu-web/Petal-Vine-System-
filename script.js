@@ -146,141 +146,6 @@ function createDefaultAdmin() {
 }
 
 function createDefaultProducts() {
-  if (products.length) return;
-
-  products = [
-    {
-      id: makeId("P"),
-      name: "Classic Red Roses",
-      category: "Roses",
-      price: 850,
-      stock: 20,
-      image: "🌹",
-      description: "A timeless bouquet of beautiful red roses."
-    },
-    {
-      id: makeId("P"),
-      name: "Pink Tulip Bouquet",
-      category: "Tulips",
-      price: 950,
-      stock: 15,
-      image: "🌷",
-      description: "Soft pink tulips for a lovely surprise."
-    },
-    {
-      id: makeId("P"),
-      name: "Sunny Sunflowers",
-      category: "Sunflowers",
-      price: 700,
-      stock: 18,
-      image: "🌻",
-      description: "Bright sunflowers to make someone's day."
-    },
-    {
-      id: makeId("P"),
-      name: "White Rose Bouquet",
-      category: "Roses",
-      price: 900,
-      stock: 12,
-      image: "💐",
-      description: "Elegant white roses for special occasions."
-    },
-    {
-      id: makeId("P"),
-      name: "Mixed Flower Basket",
-      category: "Mixed Bouquets",
-      price: 1200,
-      stock: 10,
-      image: "💐",
-      description: "A colorful mix of seasonal flowers."
-    },
-    {
-      id: makeId("P"),
-      name: "Purple Tulips",
-      category: "Tulips",
-      price: 980,
-      stock: 14,
-      image: "🪻",
-      description: "Charming purple tulips."
-    },
-    {
-      id: makeId("P"),
-      name: "Pink Rose Bouquet",
-      category: "Roses",
-      price: 880,
-      stock: 16,
-      image: "🌸",
-      description: "A sweet arrangement of pink roses."
-    },
-    {
-      id: makeId("P"),
-      name: "Garden Blooms",
-      category: "Mixed Bouquets",
-      price: 1100,
-      stock: 9,
-      image: "💮",
-      description: "A garden-inspired flower arrangement."
-    },
-    {
-      id: makeId("P"),
-      name: "White Lily Bouquet",
-      category: "Lilies",
-      price: 1350,
-      stock: 12,
-      image: "🤍",
-      description: "Elegant white lilies for meaningful occasions."
-    },
-    {
-      id: makeId("P"),
-      name: "Blue Hydrangea Bouquet",
-      category: "Hydrangeas",
-      price: 1450,
-      stock: 8,
-      image: "💠",
-      description: "Beautiful blue blooms for a thoughtful gift."
-    },
-    {
-      id: makeId("P"),
-      name: "Purple Orchid Arrangement",
-      category: "Orchids",
-      price: 1550,
-      stock: 10,
-      image: "🪻",
-      description: "Graceful purple orchids for elegant celebrations."
-    },
-    {
-      id: makeId("P"),
-      name: "White Daisy Bouquet",
-      category: "Daisies",
-      price: 650,
-      stock: 20,
-      image: "🌼",
-      description: "Fresh and cheerful white daisies."
-    },
-    {
-      id: makeId("P"),
-      name: "Carnation Love Bouquet",
-      category: "Carnations",
-      price: 780,
-      stock: 15,
-      image: "🌺",
-      description: "Lovely carnations perfect for showing appreciation."
-    },
-    {
-      id: makeId("P"),
-      name: "Peach Rose Bouquet",
-      category: "Roses",
-      price: 1050,
-      stock: 12,
-      image: "🌹",
-      description: "Warm peach roses for sweet and thoughtful gifts."
-    },
-    {
-      id: makeId("P"),
-      name: "Lavender Dream Bouquet",
-      category: "Lavender",
-
-function createDefaultProducts() {
   const defaultProducts = [
     {
       name: "Classic Red Roses",
@@ -452,6 +317,7 @@ function createDefaultProducts() {
     save(STORAGE.products, products);
   }
 }
+
 
 /* ==========================================
    AUTHENTICATION
