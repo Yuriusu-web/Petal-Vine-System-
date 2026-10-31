@@ -279,13 +279,130 @@ function createDefaultProducts() {
       id: makeId("P"),
       name: "Lavender Dream Bouquet",
       category: "Lavender",
+
+function createDefaultProducts() {
+  const defaultProducts = [
+    {
+      name: "Classic Red Roses",
+      category: "Roses",
+      price: 850,
+      stock: 20,
+      image: "🌹",
+      description: "A timeless bouquet of beautiful red roses."
+    },
+    {
+      name: "Pink Tulip Bouquet",
+      category: "Tulips",
+      price: 950,
+      stock: 15,
+      image: "🌷",
+      description: "Soft pink tulips for a lovely surprise."
+    },
+    {
+      name: "Sunny Sunflowers",
+      category: "Sunflowers",
+      price: 700,
+      stock: 18,
+      image: "🌻",
+      description: "Bright sunflowers to make someone's day."
+    },
+    {
+      name: "White Rose Bouquet",
+      category: "Roses",
+      price: 900,
+      stock: 12,
+      image: "💐",
+      description: "Elegant white roses for special occasions."
+    },
+    {
+      name: "Mixed Flower Basket",
+      category: "Mixed Bouquets",
+      price: 1200,
+      stock: 10,
+      image: "💐",
+      description: "A colorful mix of seasonal flowers."
+    },
+    {
+      name: "Purple Tulips",
+      category: "Tulips",
+      price: 980,
+      stock: 14,
+      image: "🪻",
+      description: "Charming purple tulips."
+    },
+    {
+      name: "Pink Rose Bouquet",
+      category: "Roses",
+      price: 880,
+      stock: 16,
+      image: "🌸",
+      description: "A sweet arrangement of pink roses."
+    },
+    {
+      name: "Garden Blooms",
+      category: "Mixed Bouquets",
+      price: 1100,
+      stock: 9,
+      image: "💮",
+      description: "A garden-inspired flower arrangement."
+    },
+    {
+      name: "White Lily Bouquet",
+      category: "Lilies",
+      price: 1350,
+      stock: 12,
+      image: "🤍",
+      description: "Elegant white lilies for meaningful occasions."
+    },
+    {
+      name: "Blue Hydrangea Bouquet",
+      category: "Hydrangeas",
+      price: 1450,
+      stock: 8,
+      image: "💠",
+      description: "Beautiful blue blooms for a thoughtful gift."
+    },
+    {
+      name: "Purple Orchid Arrangement",
+      category: "Orchids",
+      price: 1550,
+      stock: 10,
+      image: "🪻",
+      description: "Graceful purple orchids for elegant celebrations."
+    },
+    {
+      name: "White Daisy Bouquet",
+      category: "Daisies",
+      price: 650,
+      stock: 20,
+      image: "🌼",
+      description: "Fresh and cheerful white daisies."
+    },
+    {
+      name: "Carnation Love Bouquet",
+      category: "Carnations",
+      price: 780,
+      stock: 15,
+      image: "🌺",
+      description: "Lovely carnations perfect for showing appreciation."
+    },
+    {
+      name: "Peach Rose Bouquet",
+      category: "Roses",
+      price: 1050,
+      stock: 12,
+      image: "🌹",
+      description: "Warm peach roses for sweet and thoughtful gifts."
+    },
+    {
+      name: "Lavender Dream Bouquet",
+      category: "Lavender",
       price: 1150,
       stock: 10,
       image: "💜",
       description: "A dreamy lavender-inspired floral arrangement."
     },
     {
-      id: makeId("P"),
       name: "Pink Peony Bouquet",
       category: "Peonies",
       price: 1650,
@@ -294,7 +411,6 @@ function createDefaultProducts() {
       description: "Romantic pink peonies with soft, full blooms."
     },
     {
-      id: makeId("P"),
       name: "Orange Gerbera Bouquet",
       category: "Gerberas",
       price: 890,
@@ -303,7 +419,6 @@ function createDefaultProducts() {
       description: "Bright orange gerberas for happy celebrations."
     },
     {
-      id: makeId("P"),
       name: "Luxury Mixed Roses",
       category: "Mixed Bouquets",
       price: 1850,
@@ -312,7 +427,32 @@ function createDefaultProducts() {
       description: "A luxurious arrangement of assorted colorful roses."
     }
   ];
+
+  // Add only products that do not already exist.
+  let added = false;
+
+  defaultProducts.forEach(defaultProduct => {
+    const exists = products.some(product =>
+      String(product.name).trim().toLowerCase() ===
+      defaultProduct.name.toLowerCase()
+    );
+
+    if (!exists) {
+      products.push({
+        id: makeId("P"),
+        ...defaultProduct
+      });
+
+      added = true;
+    }
+  });
+
+  // Save the updated product list.
+  if (added) {
+    save(STORAGE.products, products);
+  }
 }
+
 /* ==========================================
    AUTHENTICATION
 ========================================== */
