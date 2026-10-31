@@ -1,8 +1,10 @@
+
 /* ==========================================
    PETAL & VINE FLOWER BOUTIQUE
    COMPLETE CONNECTED JAVASCRIPT
-   Customer + Admin + COD + Receipts
 ========================================== */
+
+"use strict";
 
 const STORAGE = {
   users: "pv_users",
@@ -19,17 +21,19 @@ let orders = [];
 let currentUser = null;
 let cart = [];
 let checkoutItems = [];
-let toastTimer;
+let toastTimer = null;
+let selectedProductImage = "";
 
 /* ==========================================
-   STORAGE HELPERS
+   STORAGE
 ========================================== */
 
 function load(key, fallback) {
   try {
     const value = localStorage.getItem(key);
     return value ? JSON.parse(value) : fallback;
-  } catch {
+  } catch (error) {
+    console.error(error);
     return fallback;
   }
 }
@@ -37,10 +41,22 @@ function load(key, fallback) {
 function save(key, value) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
+    return true;
   } catch (error) {
     console.error("Storage error:", error);
-    showToast("Unable to save data. Storage may be full.");
+    showToast("Unable to save. Storage may be full.");
+    return false;
   }
+}
+
+function refreshData() {
+  users = load(STORAGE.users, []);
+  products = load(STORAGE.products, []);
+  orders = load(STORAGE.orders, []);
+
+  if (!Array.isArray(users)) users = [];
+  if (!Array.isArray(products)) products = [];
+  if (!Array.isArray(orders)) orders = [];
 }
 
 function makeId(prefix) {
@@ -65,14 +81,11 @@ function escapeHTML(value) {
   })[char]);
 }
 
-function refreshData() {
-  users = load(STORAGE.users, []);
-  products = load(STORAGE.products, []);
-  orders = load(STORAGE.orders, []);
-
-  if (!Array.isArray(users)) users = [];
-  if (!Array.isArray(products)) products = [];
-  if (!Array.isArray(orders)) orders = [];
+function dateText(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "Unknown date"
+    : date.toLocaleString();
 }
 
 /* ==========================================
@@ -88,7 +101,7 @@ function initialize() {
   save(STORAGE.users, users);
   save(STORAGE.products, products);
 
-  // Always require login when opening the website.
+  // Require login whenever the application is opened.
   localStorage.removeItem(STORAGE.session);
 
   currentUser = null;
@@ -119,10 +132,8 @@ function createDefaultAdmin() {
     users.unshift(admin);
   }
 
-  // Do not overwrite existing admin credentials.
   admin.name = admin.name || "Administrator";
 
-  // Reserve the admin username.
   users.forEach(user => {
     if (
       user.id !== admin.id &&
@@ -222,7 +233,6 @@ function showCorrectAuthPanel() {
   $("appScreen").classList.add("hidden");
 
   showLogin();
-
   $("headerUser").textContent = "";
 }
 
@@ -268,13 +278,34 @@ function bindEvents() {
   $("profileForm").addEventListener("submit", updateProfile);
   $("settingsForm").addEventListener("submit", saveSettings);
 
-  // Close modals when clicking outside the modal card.
+  $("productSearch").addEventListener("input", renderShop);
+  $("adminProductSearch").addEventListener("input", renderAdminProducts);
+
+  $("productImage").addEventListener("input", () => {
+    if (!$("productImageFile").files[0]) {
+      updateProductImagePreview(
+        $("productImage").value.trim() || "💐"
+      );
+    }
+  });
+
+  $("productImageFile").addEventListener(
+    "change",
+    previewProductImage
+  );
+
   ["productModal", "checkoutModal", "receiptModal"].forEach(id => {
     $(id).addEventListener("click", event => {
       if (event.target.id === id) {
         closeModal(id);
       }
     });
+  });
+
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape") {
+      closeAllModals();
+    }
   });
 }
 
@@ -318,7 +349,8 @@ function login(event) {
 }
 
 /* ==========================================
-   CUSTOMER REGISTRATION
+   REGISTRATION
+   NO PHONE OR ADDRESS REQUIRED
 ========================================== */
 
 function register(event) {
@@ -330,8 +362,6 @@ function register(event) {
   const username = $("registerUsername").value.trim();
   const password = $("registerPassword").value;
   const confirm = $("registerConfirm").value;
-  const phone = $("registerPhone").value.trim();
-  const address = $("registerAddress").value.trim();
 
   if (name.length < 2) {
     $("registerMessage").textContent =
@@ -363,12 +393,6 @@ function register(event) {
     return;
   }
 
-  if (!phone || !address) {
-    $("registerMessage").textContent =
-      "Please complete your contact details.";
-    return;
-  }
-
   if (users.some(user =>
     String(user.username).toLowerCase() === username.toLowerCase()
   )) {
@@ -382,14 +406,18 @@ function register(event) {
     name,
     username,
     password,
-    phone,
-    address,
+    phone: "",
+    address: "",
     role: "customer",
     createdAt: new Date().toISOString()
   };
 
   users.push(newUser);
-  save(STORAGE.users, users);
+
+  if (!save(STORAGE.users, users)) {
+    users.pop();
+    return;
+  }
 
   $("registerForm").reset();
 
@@ -437,16 +465,20 @@ function openApplication() {
   $("customerNav").classList.toggle("hidden", isAdmin);
 
   if (isAdmin) {
-    adminPage("dashboard",
-      $("adminNav").querySelector(".nav-link"));
+    adminPage(
+      "dashboard",
+      $("adminNav").querySelector(".nav-link")
+    );
   } else {
     cart = [];
     updateCartCount();
 
     $("productSearch").value = "";
 
-    customerPage("shop",
-      $("customerNav").querySelector(".nav-link"));
+    customerPage(
+      "shop",
+      $("customerNav").querySelector(".nav-link")
+    );
   }
 }
 
@@ -473,7 +505,6 @@ function logout() {
 
 function togglePassword(id, button) {
   const field = $(id);
-
   if (!field) return;
 
   const showing = field.type === "password";
@@ -483,7 +514,7 @@ function togglePassword(id, button) {
 }
 
 /* ==========================================
-   NAVIGATION HELPERS
+   NAVIGATION
 ========================================== */
 
 function setPage(pageId, nav, title) {
@@ -493,9 +524,7 @@ function setPage(pageId, nav, title) {
 
   const target = $(pageId);
 
-  if (target) {
-    target.classList.remove("hidden");
-  }
+  if (target) target.classList.remove("hidden");
 
   document.querySelectorAll(".nav-link").forEach(button => {
     button.classList.remove("active");
@@ -505,10 +534,6 @@ function setPage(pageId, nav, title) {
 
   $("pageTitle").textContent = title;
 }
-
-/* ==========================================
-   CUSTOMER NAVIGATION
-========================================== */
 
 function customerPage(page, button) {
   if (!currentUser || currentUser.role !== "customer") return;
@@ -534,10 +559,6 @@ function customerPage(page, button) {
   if (page === "transactions") renderCustomerTransactions();
   if (page === "profile") loadProfile();
 }
-
-/* ==========================================
-   ADMIN NAVIGATION
-========================================== */
 
 function adminPage(page, button) {
   if (!currentUser || currentUser.role !== "admin") return;
@@ -572,7 +593,7 @@ function refreshAdmin() {
 }
 
 /* ==========================================
-   DASHBOARD
+   ADMIN DASHBOARD
 ========================================== */
 
 function renderDashboard() {
@@ -637,20 +658,17 @@ function renderDashboard() {
 
   $("recentOrders").innerHTML = recent.length
     ? orderTable(recent, false)
-    : emptyState(
-        "No orders yet",
-        "Customer purchases will appear here."
-      );
+    : emptyState("No orders yet", "Customer purchases will appear here.");
 }
 
 /* ==========================================
-   PRODUCT IMAGE
+   PRODUCT IMAGE DISPLAY
 ========================================== */
 
 function productImageHTML(image) {
   const value = String(image || "💐").trim();
 
-  if (/^https?:\/\//i.test(value)) {
+  if (/^(https?:\/\/|data:image\/)/i.test(value)) {
     return `
       <img src="${escapeHTML(value)}"
         alt="Flower product"
@@ -663,7 +681,71 @@ function productImageHTML(image) {
 }
 
 /* ==========================================
-   PRODUCT MANAGEMENT
+   PRODUCT IMAGE UPLOAD
+========================================== */
+
+function previewProductImage() {
+  const file = $("productImageFile").files[0];
+
+  if (!file) return;
+
+  if (!file.type.startsWith("image/")) {
+    showToast("Please select a valid image.");
+    $("productImageFile").value = "";
+    return;
+  }
+
+  if (file.size > 1.5 * 1024 * 1024) {
+    showToast("Image must be 1.5MB or smaller.");
+    $("productImageFile").value = "";
+    return;
+  }
+
+  const reader = new FileReader();
+
+  reader.onload = event => {
+    $("productImagePreview").innerHTML = `
+      <img src="${event.target.result}"
+        alt="Product preview">
+    `;
+  };
+
+  reader.onerror = () => {
+    showToast("Unable to read the selected image.");
+  };
+
+  reader.readAsDataURL(file);
+}
+
+function readProductImage(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(
+      new Error("Unable to read image.")
+    );
+
+    reader.readAsDataURL(file);
+  });
+}
+
+function updateProductImagePreview(value) {
+  const preview = $("productImagePreview");
+
+  if (/^(https?:\/\/|data:image\/)/i.test(value)) {
+    preview.innerHTML = `
+      <img src="${escapeHTML(value)}"
+        alt="Product preview"
+        onerror="this.parentElement.textContent='💐'">
+    `;
+  } else {
+    preview.textContent = value || "💐";
+  }
+}
+
+/* ==========================================
+   ADD / EDIT PRODUCT
 ========================================== */
 
 function openProductModal(id = "") {
@@ -671,13 +753,14 @@ function openProductModal(id = "") {
 
   $("productForm").reset();
   $("productId").value = id;
+  $("productImageFile").value = "";
 
   const product = products.find(item => item.id === id);
 
+  selectedProductImage = product ? product.image : "";
+
   $("productModalTitle").textContent =
     product ? "Edit Product" : "Add Product";
-
-  $("productImage").value = "💐";
 
   if (product) {
     $("productName").value = product.name;
@@ -685,13 +768,22 @@ function openProductModal(id = "") {
     $("productDescription").value = product.description || "";
     $("productPrice").value = product.price;
     $("productStock").value = product.stock;
-    $("productImage").value = product.image || "💐";
+
+    $("productImage").value =
+      product.image && !product.image.startsWith("data:image/")
+        ? product.image
+        : "";
+
+    updateProductImagePreview(product.image || "💐");
+  } else {
+    $("productImage").value = "💐";
+    updateProductImagePreview("💐");
   }
 
   $("productModal").classList.remove("hidden");
 }
 
-function saveProduct(event) {
+async function saveProduct(event) {
   event.preventDefault();
 
   if (!currentUser || currentUser.role !== "admin") return;
@@ -703,8 +795,7 @@ function saveProduct(event) {
     category: $("productCategory").value.trim(),
     description: $("productDescription").value.trim(),
     price: Number($("productPrice").value),
-    stock: Number($("productStock").value),
-    image: $("productImage").value.trim() || "💐"
+    stock: Number($("productStock").value)
   };
 
   if (
@@ -719,15 +810,51 @@ function saveProduct(event) {
     return;
   }
 
+  const existing = products.find(item => item.id === id);
+  const file = $("productImageFile").files[0];
+
+  let image = $("productImage").value.trim();
+
+  try {
+    if (file) {
+      if (!file.type.startsWith("image/")) {
+        showToast("Please select a valid image.");
+        return;
+      }
+
+      if (file.size > 1.5 * 1024 * 1024) {
+        showToast("Image must be 1.5MB or smaller.");
+        return;
+      }
+
+      image = await readProductImage(file);
+
+    } else if (!image) {
+      image = selectedProductImage || "💐";
+    }
+
+  } catch (error) {
+    showToast("Unable to upload picture.");
+    return;
+  }
+
+  data.image = image || "💐";
+
   if (id) {
     const index = products.findIndex(item => item.id === id);
 
-    if (index === -1) return;
+    if (index === -1) {
+      showToast("Product no longer exists.");
+      return;
+    }
+
+    const previous = products[index];
 
     products[index] = {
-      ...products[index],
+      ...previous,
       ...data
     };
+
   } else {
     products.push({
       id: makeId("P"),
@@ -735,14 +862,27 @@ function saveProduct(event) {
     });
   }
 
-  save(STORAGE.products, products);
+  if (!save(STORAGE.products, products)) {
+    if (existing) {
+      const index = products.findIndex(item => item.id === id);
+      products[index] = existing;
+    } else {
+      products.pop();
+    }
+    return;
+  }
 
   closeModal("productModal");
   refreshAdmin();
 
-  showToast(id ? "Product updated successfully." :
-    "Product added successfully.");
+  showToast(id
+    ? "Product updated successfully."
+    : "Product added successfully.");
 }
+
+/* ==========================================
+   DELETE PRODUCT
+========================================== */
 
 function deleteProduct(id) {
   if (!currentUser || currentUser.role !== "admin") return;
@@ -753,12 +893,15 @@ function deleteProduct(id) {
 
   if (!confirm("Delete " + product.name + "?")) return;
 
-  products = products.filter(item => item.id !== id);
+  const oldProducts = [...products];
 
-  // Remove deleted products from active customer carts.
+  products = products.filter(item => item.id !== id);
   cart = cart.filter(item => item.productId !== id);
 
-  save(STORAGE.products, products);
+  if (!save(STORAGE.products, products)) {
+    products = oldProducts;
+    return;
+  }
 
   updateCartCount();
   refreshAdmin();
@@ -766,8 +909,14 @@ function deleteProduct(id) {
   showToast("Product deleted.");
 }
 
+/* ==========================================
+   ADMIN PRODUCT DISPLAY
+========================================== */
+
 function renderAdminProducts() {
   if (!currentUser || currentUser.role !== "admin") return;
+
+  refreshData();
 
   const search = (
     $("adminProductSearch").value || ""
@@ -781,12 +930,14 @@ function renderAdminProducts() {
   $("adminProducts").innerHTML = filtered.length
     ? filtered.map(product => `
       <article class="product-card">
+
         <div class="product-image">
           ${productImageHTML(product.image)}
         </div>
 
         <div class="product-info">
           <h3>${escapeHTML(product.name)}</h3>
+
           <p>${escapeHTML(product.category)}</p>
 
           <div class="price">${money(product.price)}</div>
@@ -813,11 +964,13 @@ function renderAdminProducts() {
 }
 
 /* ==========================================
-   INVENTORY MANAGEMENT
+   INVENTORY
 ========================================== */
 
 function renderInventory() {
   if (!currentUser || currentUser.role !== "admin") return;
+
+  refreshData();
 
   $("inventoryList").innerHTML = products.length ? `
     <div class="table-wrap">
@@ -853,7 +1006,7 @@ function renderInventory() {
               <td>
                 <button class="btn outline small"
                   onclick="openProductModal('${product.id}')">
-                  Update
+                  Edit Stock
                 </button>
               </td>
             </tr>
@@ -870,6 +1023,8 @@ function renderInventory() {
 
 function renderAdminOrders() {
   if (!currentUser || currentUser.role !== "admin") return;
+
+  refreshData();
 
   const sorted = [...orders].sort((a,b) =>
     new Date(b.createdAt) - new Date(a.createdAt)
@@ -901,7 +1056,7 @@ function orderTable(list, actions = false) {
             <tr>
               <td>${escapeHTML(order.id)}</td>
               <td>${escapeHTML(order.customerName)}</td>
-              <td>${new Date(order.createdAt).toLocaleDateString()}</td>
+              <td>${dateText(order.createdAt)}</td>
               <td>${money(order.total)}</td>
               <td>COD</td>
 
@@ -922,6 +1077,7 @@ function orderTable(list, actions = false) {
                   </button>
 
                   <select
+                    aria-label="Order status"
                     onchange="updateOrderStatus('${order.id}',this.value)">
                     ${[
                       "Pending",
@@ -946,7 +1102,7 @@ function orderTable(list, actions = false) {
 }
 
 /* ==========================================
-   UPDATE ORDER STATUS AND STOCK
+   UPDATE ORDER STATUS
 ========================================== */
 
 function updateOrderStatus(id, status) {
@@ -971,22 +1127,22 @@ function updateOrderStatus(id, status) {
 
   if (oldStatus === status) return;
 
-  // Restore inventory when an order is cancelled.
+  const oldProducts = products.map(product => ({...product}));
+
   if (status === "Cancelled" && oldStatus !== "Cancelled") {
-    order.items.forEach(item => {
+    (order.items || []).forEach(item => {
       const product = products.find(
         product => product.id === item.productId
       );
 
       if (product) {
-        product.stock += item.quantity;
+        product.stock += Number(item.quantity);
       }
     });
   }
 
-  // Check inventory before restoring a cancelled order.
   if (oldStatus === "Cancelled" && status !== "Cancelled") {
-    for (const item of order.items) {
+    for (const item of order.items || []) {
       const product = products.find(
         product => product.id === item.productId
       );
@@ -1007,14 +1163,25 @@ function updateOrderStatus(id, status) {
     });
   }
 
+  const oldOrderStatus = oldStatus;
   order.status = status;
   order.updatedAt = new Date().toISOString();
 
-  save(STORAGE.orders, orders);
-  save(STORAGE.products, products);
+  if (
+    !save(STORAGE.orders, orders) ||
+    !save(STORAGE.products, products)
+  ) {
+    order.status = oldOrderStatus;
+    products = oldProducts;
+
+    save(STORAGE.orders, orders);
+    save(STORAGE.products, products);
+
+    renderAdminOrders();
+    return;
+  }
 
   refreshAdmin();
-
   showToast("Order status updated.");
 }
 
@@ -1024,6 +1191,8 @@ function updateOrderStatus(id, status) {
 
 function renderUsers() {
   if (!currentUser || currentUser.role !== "admin") return;
+
+  refreshData();
 
   const customers = users.filter(user =>
     user.role === "customer"
@@ -1048,9 +1217,9 @@ function renderUsers() {
             <tr>
               <td>${escapeHTML(user.name)}</td>
               <td>${escapeHTML(user.username)}</td>
-              <td>${escapeHTML(user.phone)}</td>
-              <td>${escapeHTML(user.address)}</td>
-              <td>${new Date(user.createdAt).toLocaleDateString()}</td>
+              <td>${escapeHTML(user.phone || "Not provided")}</td>
+              <td>${escapeHTML(user.address || "Not provided")}</td>
+              <td>${dateText(user.createdAt)}</td>
               <td>
                 <button class="btn danger small"
                   onclick="deleteUser('${user.id}')">
@@ -1074,9 +1243,14 @@ function deleteUser(id) {
 
   if (!confirm("Delete customer account for " + user.name + "?")) return;
 
+  const oldUsers = [...users];
+
   users = users.filter(item => item.id !== id);
 
-  save(STORAGE.users, users);
+  if (!save(STORAGE.users, users)) {
+    users = oldUsers;
+    return;
+  }
 
   renderUsers();
   renderDashboard();
@@ -1108,6 +1282,8 @@ function saveSettings(event) {
 
   if (!currentUser || currentUser.role !== "admin") return;
 
+  refreshData();
+
   const admin = users.find(user =>
     user.id === currentUser.id
   );
@@ -1133,10 +1309,6 @@ function saveSettings(event) {
     return;
   }
 
-  if (username.toLowerCase() === "admin" && admin.username !== "admin") {
-    // The reserved username may only belong to the administrator.
-  }
-
   if (password && password.length < 6) {
     $("settingsMessage").textContent =
       "Password must have at least 6 characters.";
@@ -1149,19 +1321,23 @@ function saveSettings(event) {
     return;
   }
 
+  const oldUsername = admin.username;
+  const oldPassword = admin.password;
+
   admin.username = username;
 
-  if (password) {
-    admin.password = password;
-  }
+  if (password) admin.password = password;
 
-  save(STORAGE.users, users);
+  if (!save(STORAGE.users, users)) {
+    admin.username = oldUsername;
+    admin.password = oldPassword;
+    return;
+  }
 
   $("settingsPassword").value = "";
   $("settingsConfirm").value = "";
 
-  $("headerUser").textContent =
-    admin.name + " (admin)";
+  $("headerUser").textContent = admin.name + " (admin)";
 
   $("settingsMessage").textContent =
     "Admin settings saved successfully.";
@@ -1246,14 +1422,11 @@ function renderShop() {
 function getSelectedQuantity(id, stock) {
   const field = $("qty-" + id);
 
-  if (!field) return 1;
+  if (!field) return null;
 
   const quantity = Number(field.value);
 
-  if (
-    !Number.isInteger(quantity) ||
-    quantity < 1
-  ) {
+  if (!Number.isInteger(quantity) || quantity < 1) {
     showToast("Quantity must be at least 1.");
     field.value = 1;
     return null;
@@ -1288,10 +1461,7 @@ function addToCart(id) {
 
   if (quantity === null) return;
 
-  const item = cart.find(entry =>
-    entry.productId === id
-  );
-
+  const item = cart.find(entry => entry.productId === id);
   const existingQuantity = item ? item.quantity : 0;
 
   if (existingQuantity + quantity > product.stock) {
@@ -1309,7 +1479,6 @@ function addToCart(id) {
   }
 
   updateCartCount();
-
   showToast(quantity + " item(s) added to your cart.");
 }
 
@@ -1355,13 +1524,8 @@ function updateCartCount() {
 ========================================== */
 
 function changeCartQuantity(id, quantity) {
-  const item = cart.find(entry =>
-    entry.productId === id
-  );
-
-  const product = products.find(entry =>
-    entry.id === id
-  );
+  const item = cart.find(entry => entry.productId === id);
+  const product = products.find(entry => entry.id === id);
 
   if (!item || !product) return;
 
@@ -1386,9 +1550,7 @@ function changeCartQuantity(id, quantity) {
 }
 
 function removeFromCart(id) {
-  cart = cart.filter(item =>
-    item.productId !== id
-  );
+  cart = cart.filter(item => item.productId !== id);
 
   updateCartCount();
   renderCart();
@@ -1406,9 +1568,7 @@ function renderCart() {
   refreshData();
 
   cart = cart.filter(item =>
-    products.some(product =>
-      product.id === item.productId
-    )
+    products.some(product => product.id === item.productId)
   );
 
   if (!cart.length) {
@@ -1437,7 +1597,6 @@ function renderCart() {
 
       return `
         <div class="cart-row">
-
           <div>
             <strong>${escapeHTML(product.name)}</strong>
             <p class="muted">${money(product.price)} each</p>
@@ -1459,7 +1618,6 @@ function renderCart() {
             onclick="removeFromCart('${product.id}')">
             Remove
           </button>
-
         </div>
       `;
     }).join("")}
@@ -1467,7 +1625,6 @@ function renderCart() {
     <div class="cart-total">
       <p>Total Amount</p>
       <strong>${money(total)}</strong>
-
       <p class="muted">Payment: Cash on Delivery</p>
 
       <button class="btn primary"
@@ -1574,7 +1731,6 @@ function placeOrder(event) {
 
   refreshData();
 
-  // Recheck account before saving order.
   const account = users.find(user =>
     user.id === currentUser.id
   );
@@ -1598,7 +1754,7 @@ function placeOrder(event) {
     return;
   }
 
-  // Check every item before deducting stock.
+  // Validate every item before deducting stock.
   for (const item of checkoutItems) {
     const product = products.find(product =>
       product.id === item.productId
@@ -1611,7 +1767,6 @@ function placeOrder(event) {
       item.quantity > product.stock
     ) {
       showToast("Stock changed. Please review your order.");
-      closeModal("checkoutModal");
       return;
     }
   }
@@ -1647,7 +1802,8 @@ function placeOrder(event) {
     createdAt: new Date().toISOString()
   };
 
-  // Deduct stock only after validation.
+  const oldProducts = products.map(product => ({...product}));
+
   orderItems.forEach(item => {
     const product = products.find(product =>
       product.id === item.productId
@@ -1658,16 +1814,28 @@ function placeOrder(event) {
 
   orders.push(order);
 
-  // Update customer delivery details.
-  currentUser.name = name;
-  currentUser.phone = phone;
-  currentUser.address = address;
+  account.name = name;
+  account.phone = phone;
+  account.address = address;
 
-  save(STORAGE.users, users);
-  save(STORAGE.orders, orders);
-  save(STORAGE.products, products);
+  // Save all data and roll back if storage fails.
+  const usersSaved = save(STORAGE.users, users);
+  const ordersSaved = usersSaved && save(STORAGE.orders, orders);
+  const productsSaved = ordersSaved && save(STORAGE.products, products);
 
-  // Clear the cart after successful checkout.
+  if (!productsSaved) {
+    products = oldProducts;
+    orders = orders.filter(item => item.id !== order.id);
+
+    save(STORAGE.products, products);
+    save(STORAGE.orders, orders);
+
+    showToast("Order could not be saved. Please try again.");
+    return;
+  }
+
+  currentUser = account;
+
   cart = [];
   checkoutItems = [];
 
@@ -1676,7 +1844,6 @@ function placeOrder(event) {
   $("checkoutForm").reset();
   closeModal("checkoutModal");
 
-  // Display receipt.
   viewReceipt(order.id);
 
   showToast("Order placed successfully!");
@@ -1704,9 +1871,7 @@ function renderCustomerOrders() {
         <div class="page-heading">
           <div>
             <h3>${escapeHTML(order.id)}</h3>
-            <p class="muted">
-              ${new Date(order.createdAt).toLocaleString()}
-            </p>
+            <p class="muted">${dateText(order.createdAt)}</p>
           </div>
 
           <span class="badge ${
@@ -1717,7 +1882,7 @@ function renderCustomerOrders() {
           </span>
         </div>
 
-        ${order.items.map(item => `
+        ${(order.items || []).map(item => `
           <div class="receipt-line">
             <span>
               ${escapeHTML(item.name)} × ${item.quantity}
@@ -1762,9 +1927,7 @@ function renderCustomerReceipts() {
       <div class="panel" style="margin-bottom:15px">
         <h3>Receipt: ${escapeHTML(order.id)}</h3>
 
-        <p class="muted">
-          ${new Date(order.createdAt).toLocaleString()}
-        </p>
+        <p class="muted">${dateText(order.createdAt)}</p>
 
         <div class="receipt-line">
           <span>Total Amount</span>
@@ -1823,7 +1986,7 @@ function renderCustomerTransactions() {
             ${myOrders.map(order => `
               <tr>
                 <td>${escapeHTML(order.id)}</td>
-                <td>${new Date(order.createdAt).toLocaleDateString()}</td>
+                <td>${dateText(order.createdAt)}</td>
                 <td>COD</td>
                 <td>${money(order.total)}</td>
                 <td>
@@ -1858,13 +2021,10 @@ function viewReceipt(id) {
 
   refreshData();
 
-  const order = orders.find(item =>
-    item.id === id
-  );
+  const order = orders.find(item => item.id === id);
 
   if (!order) return;
 
-  // Customer can only view their own receipt.
   if (
     currentUser.role === "customer" &&
     order.userId !== currentUser.id
@@ -1888,7 +2048,7 @@ function viewReceipt(id) {
 
       <div class="receipt-line">
         <span>Date</span>
-        <span>${new Date(order.createdAt).toLocaleString()}</span>
+        <span>${dateText(order.createdAt)}</span>
       </div>
 
       <div class="receipt-line">
@@ -1920,7 +2080,7 @@ function viewReceipt(id) {
 
       <h3>Purchased Items</h3>
 
-      ${order.items.map(item => `
+      ${(order.items || []).map(item => `
         <div class="receipt-line">
           <span>
             ${escapeHTML(item.name)} × ${item.quantity}
@@ -1970,9 +2130,7 @@ function updateProfile(event) {
 
   refreshData();
 
-  const user = users.find(item =>
-    item.id === currentUser.id
-  );
+  const user = users.find(item => item.id === currentUser.id);
 
   if (!user) return;
 
@@ -2015,18 +2173,21 @@ function updateProfile(event) {
     return;
   }
 
+  const previous = {...user};
+
   user.name = name;
   user.username = username;
   user.phone = phone;
   user.address = address;
 
-  if (password) {
-    user.password = password;
+  if (password) user.password = password;
+
+  if (!save(STORAGE.users, users)) {
+    Object.assign(user, previous);
+    return;
   }
 
   currentUser = user;
-
-  save(STORAGE.users, users);
 
   $("welcomeText").textContent = "Hello, " + name;
   $("headerUser").textContent = name + " (customer)";
@@ -2038,15 +2199,13 @@ function updateProfile(event) {
 }
 
 /* ==========================================
-   MODAL FUNCTIONS
+   MODALS
 ========================================== */
 
 function closeModal(id) {
   const modal = $(id);
 
-  if (modal) {
-    modal.classList.add("hidden");
-  }
+  if (modal) modal.classList.add("hidden");
 
   if (id === "checkoutModal") {
     checkoutItems = [];
@@ -2057,6 +2216,8 @@ function closeAllModals() {
   document.querySelectorAll(".modal").forEach(modal => {
     modal.classList.add("hidden");
   });
+
+  checkoutItems = [];
 }
 
 /* ==========================================
@@ -2073,7 +2234,7 @@ function emptyState(title, description) {
 }
 
 /* ==========================================
-   TOAST NOTIFICATION
+   TOAST
 ========================================== */
 
 function showToast(message) {
