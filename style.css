@@ -1,3 +1,4 @@
+
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap');
 
 :root {
@@ -16,6 +17,10 @@
 
 * {
   box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
@@ -144,6 +149,8 @@ label {
   justify-content: space-between;
   background: white;
   border-bottom: 1px solid var(--border);
+  position: relative;
+  z-index: 5;
 }
 
 .brand {
@@ -357,6 +364,7 @@ label {
   flex: 1;
   min-width: 0;
   max-width: 1600px;
+  margin: 0 auto;
 }
 
 .page-heading {
@@ -512,7 +520,7 @@ label {
   font-size: 12px;
 }
 
-/* CARDS AND FORMS */
+/* FORMS AND CARDS */
 
 .form-card,
 .panel,
@@ -527,6 +535,10 @@ label {
 
 .form-card {
   max-width: 650px;
+}
+
+.form-card.wide {
+  max-width: 100%;
 }
 
 .about-card {
@@ -568,7 +580,7 @@ label {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(4,minmax(0,1fr));
+  grid-template-columns: repeat(3,minmax(0,1fr));
   gap: 15px;
   margin-bottom: 22px;
 }
@@ -717,6 +729,32 @@ td select {
   margin: 15px 0;
 }
 
+/* IMAGE UPLOAD PREVIEW */
+
+.product-image-preview {
+  width: 100%;
+  height: 180px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  background: var(--pink);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  font-size: 65px;
+  margin: 10px 0 18px;
+}
+
+.product-image-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+#productImageFile {
+  padding: 10px;
+  background: #fff8fb;
+}
+
 /* RECEIPTS */
 
 .receipt {
@@ -810,6 +848,11 @@ td select {
 
   .brand {
     font-size: 19px;
+  }
+
+  .header-user {
+    font-size: 11px;
+    text-align: right;
   }
 
   .app-screen {
@@ -922,6 +965,10 @@ td select {
   .modal-card {
     padding: 23px 18px;
   }
+
+  .product-image-preview {
+    height: 150px;
+  }
 }
 
 @media(max-width:380px) {
@@ -939,6 +986,14 @@ td select {
 
   .stat-card strong {
     font-size: 19px;
+  }
+
+  .hero {
+    padding: 18px;
+  }
+
+  .hero-flower {
+    font-size: 45px;
   }
 }
 
