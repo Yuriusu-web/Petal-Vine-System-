@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -49,6 +50,7 @@
         <button class="btn primary full" type="submit">Login</button>
       </form>
 
+      <!-- REGISTRATION: NO PHONE OR ADDRESS -->
       <form id="registerForm" class="hidden">
         <label for="registerName">Full Name</label>
         <input id="registerName" type="text"
@@ -68,18 +70,15 @@
         </div>
 
         <label for="registerConfirm">Confirm Password</label>
-        <input id="registerConfirm" type="password"
-          placeholder="Confirm password" required>
-
-        <label for="registerPhone">Contact Number</label>
-        <input id="registerPhone" type="tel"
-          placeholder="Enter contact number" required>
-
-        <label for="registerAddress">Delivery Address</label>
-        <textarea id="registerAddress"
-          placeholder="Enter your complete address" required></textarea>
+        <div class="password-wrap">
+          <input id="registerConfirm" type="password"
+            placeholder="Confirm password" required>
+          <button type="button" class="show-password"
+            onclick="togglePassword('registerConfirm',this)">Show</button>
+        </div>
 
         <p id="registerMessage" class="message"></p>
+
         <button class="btn primary full" type="submit">
           Create Account
         </button>
@@ -190,7 +189,7 @@
             <p class="muted">Choose your favorite blooms and quantity.</p>
           </div>
           <input id="productSearch" class="search-input"
-            placeholder="Search flowers..." oninput="renderShop()">
+            placeholder="Search flowers...">
         </div>
 
         <div id="shopProducts" class="product-grid"></div>
@@ -283,7 +282,7 @@
       <!-- ADMIN DASHBOARD -->
       <section id="admin-dashboard" class="page hidden">
         <div class="stats-grid" id="dashboardStats"></div>
-        <div class="form-card">
+        <div class="form-card wide">
           <h2>Recent Orders</h2>
           <div id="recentOrders"></div>
         </div>
@@ -302,7 +301,7 @@
         </div>
 
         <input id="adminProductSearch" class="search-input"
-          placeholder="Search products..." oninput="renderAdminProducts()">
+          placeholder="Search products...">
 
         <div id="adminProducts" class="product-grid"></div>
       </section>
@@ -357,7 +356,9 @@
 <!-- PRODUCT MODAL -->
 <div id="productModal" class="modal hidden">
   <div class="modal-card">
-    <button class="modal-close" onclick="closeModal('productModal')">×</button>
+    <button class="modal-close"
+      onclick="closeModal('productModal')">×</button>
+
     <h2 id="productModalTitle">Add Product</h2>
 
     <form id="productForm">
@@ -367,24 +368,39 @@
       <input id="productName" required>
 
       <label>Category</label>
-      <input id="productCategory" placeholder="Roses, Tulips, etc." required>
+      <input id="productCategory"
+        placeholder="Roses, Tulips, etc." required>
 
       <label>Description</label>
       <textarea id="productDescription" rows="3"></textarea>
 
       <label>Price (₱)</label>
-      <input id="productPrice" type="number" min="0.01"
-        step="0.01" required>
+      <input id="productPrice" type="number"
+        min="0.01" step="0.01" required>
 
       <label>Stock Quantity</label>
-      <input id="productStock" type="number" min="0"
-        step="1" required>
+      <input id="productStock" type="number"
+        min="0" step="1" required>
 
       <label>Flower Emoji or Image URL</label>
       <input id="productImage" value="💐"
         placeholder="🌹 or https://example.com/flower.jpg">
 
-      <button class="btn primary full" type="submit">Save Product</button>
+      <label>Upload Product Picture</label>
+      <input id="productImageFile" type="file"
+        accept="image/*">
+
+      <p class="muted">
+        Use an emoji, image URL, or upload a picture.
+        Uploads are limited to 1.5 MB.
+      </p>
+
+      <div id="productImagePreview"
+        class="product-image-preview">💐</div>
+
+      <button class="btn primary full" type="submit">
+        Save Product
+      </button>
     </form>
   </div>
 </div>
@@ -392,7 +408,9 @@
 <!-- CHECKOUT MODAL -->
 <div id="checkoutModal" class="modal hidden">
   <div class="modal-card">
-    <button class="modal-close" onclick="closeModal('checkoutModal')">×</button>
+    <button class="modal-close"
+      onclick="closeModal('checkoutModal')">×</button>
+
     <h2>Checkout</h2>
 
     <div id="checkoutSummary" class="checkout-summary"></div>
@@ -410,7 +428,9 @@
       <label>Payment Method</label>
       <input value="Cash on Delivery (COD)" disabled>
 
-      <button class="btn primary full" type="submit">Place Order</button>
+      <button class="btn primary full" type="submit">
+        Place Order
+      </button>
     </form>
   </div>
 </div>
@@ -428,7 +448,8 @@
   </div>
 </div>
 
-<div id="toast" class="toast"></div>
+<div id="toast" class="toast" role="status"
+  aria-live="polite"></div>
 
 </body>
 </html>
