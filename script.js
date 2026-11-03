@@ -1,38 +1,116 @@
 "use strict";
 
-/* PETAL & VINE FLOWER BOUTIQUE
-   Separate front-end files; data is stored in this browser only.
-   Demo only: localStorage is not secure authentication or a shared database. */
+/* =========================================================
+   PETAL & VINE FLOWER BOUTIQUE
+   COMPLETE CONNECTED JAVASCRIPT
+   Storage: Browser LocalStorage
+   Database: Not Required
+========================================================= */
+
+/* =========================================================
+   1. STORAGE AND CONFIGURATION
+========================================================= */
 
 const DB = {
-  users: "pv_users", products: "pv_products", orders: "pv_orders",
-  carts: "pv_carts", session: "pv_session", queue: "pv_order_queue",
+  users: "pv_users",
+  products: "pv_products",
+  orders: "pv_orders",
+  carts: "pv_carts",
+  session: "pv_session",
+  queue: "pv_order_queue",
   counters: "pv_counters"
 };
 
 const $ = id => document.getElementById(id);
-const money = value => "₱" + Number(value || 0).toLocaleString("en-PH", {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2
-});
-const esc = value => String(value ?? "").replace(/[&<>"']/g, c => ({
-  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;"
-}[c]));
-const dateText = value => {
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? "—" : d.toLocaleString("en-PH");
-};
-const validPhone = value => /^[0-9+\-\s()]{7,20}$/.test(value.trim());
 
-let users = [], products = [], orders = [], carts = {}, currentUser = null, currentRole = null;
-let nextProductId = 1, nextOrderId = 1, selectedProduct = null, toastTimer = null;
+let users = [];
+let products = [];
+let orders = [];
+let carts = {};
+
+let currentUser = null;
+let currentRole = null;
+let currentPage = "";
+let toastTimer = null;
+let selectedProduct = null;
+
+let nextProductId = 1;
+let nextOrderId = 1;
+
+let orderQueue;
+
+/* =========================================================
+   2. HELPER FUNCTIONS
+========================================================= */
+
+function escapeHTML(value) {
+  return String(value ?? "").replace(/[&<>"']/g, char => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  })[char]);
+}
+
+function money(amount) {
+  return "₱" + Number(amount || 0).toLocaleString("en-PH", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+}
+
+function formatDate(date) {
+  if (!date) return "—";
+
+  const parsed = new Date(date);
+
+  return Number.isNaN(parsed.getTime())
+    ? "—"
+    : parsed.toLocaleString("en-PH");
+}
+
+function notify(message, type = "success") {
+  const toast = $("toast");
+
+  if (!toast) return;
+
+  clearTimeout(toastTimer);
+
+  toast.textContent = message;
+  toast.classList.remove("hidden", "show", "error");
+
+  if (type === "error") {
+    toast.classList.add("error");
+  }
+
+  requestAnimationFrame(() => {
+    toast.classList.add("show");
+  });
+
+  toastTimer = setTimeout(() => {
+    toast.classList.remove("show");
+
+    setTimeout(() => {
+      toast.classList.add("hidden");
+    }, 300);
+  }, 2800);
+}
+
+function validPhone(phone) {
+  return /^[0-9+\-\s()]{7,20}$/.test(phone.trim());
+}
 
 function read(key, fallback) {
   try {
-    const raw = localStorage.getItem(key);
-    return raw === null ? fallback : JSON.parse(raw);
+    const value = localStorage.getItem(key);
+
+    return value === null
+      ? fallback
+      : JSON.parse(value);
+
   } catch (error) {
-    console.error("Storage read error", error);
+    console.error("Storage read error:", error);
     return fallback;
   }
 }
@@ -41,29 +119,17 @@ function save(key, value) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
     return true;
+
   } catch (error) {
-    console.error("Storage save error", error);
-    notify("Unable to save. Browser storage may be full.", "error");
+    console.error("Storage save error:", error);
+
+    notify(
+      "Unable to save. Browser storage may be full.",
+      "error"
+    );
+
     return false;
   }
-}
-
-function notify(message, type = "success") {
-  const toast = $("toast");
-  if (!toast) return;
-
-  clearTimeout(toastTimer);
-  toast.textContent = message;
-  toast.classList.remove("hidden", "show", "error");
-
-  if (type === "error") toast.classList.add("error");
-
-  requestAnimationFrame(() => toast.classList.add("show"));
-
-  toastTimer = setTimeout(() => {
-    toast.classList.remove("show");
-    setTimeout(() => toast.classList.add("hidden"), 250);
-  }, 2600);
 }
 
 function saveAll() {
@@ -72,28 +138,73 @@ function saveAll() {
     localStorage.setItem(DB.products, JSON.stringify(products));
     localStorage.setItem(DB.orders, JSON.stringify(orders));
     localStorage.setItem(DB.carts, JSON.stringify(carts));
-    localStorage.setItem(DB.queue, JSON.stringify(orderQueue.toArray()));
+
+    localStorage.setItem(
+      DB.queue,
+      JSON.stringify(orderQueue.toArray())
+    );
+
     localStorage.setItem(DB.counters, JSON.stringify({
       product: nextProductId,
       order: nextOrderId
     }));
+
     return true;
+
   } catch (error) {
-    console.error(error);
-    notify("Unable to save application data.", "error");
+    console.error("Save error:", error);
+
+    notify(
+      "Unable to save application data.",
+      "error"
+    );
+
     return false;
   }
 }
 
-/* FIFO QUEUE */
+function getCart() {
+  if (!currentUser) return [];
+
+  if (!Array.isArray(carts[currentUser.id])) {
+    carts[currentUser.id] = [];
+  }
+
+  return carts[currentUser.id];
+}
+
+function setCart(cart) {
+  if (!currentUser) return false;
+
+  const oldCart = carts[currentUser.id] || [];
+
+  carts[currentUser.id] = cart;
+
+  if (!save(DB.carts, carts)) {
+    carts[currentUser.id] = oldCart;
+    return false;
+  }
+
+  updateCartCount();
+
+  return true;
+}
+
+/* =========================================================
+   3. FIFO QUEUE DATA STRUCTURE
+========================================================= */
 
 class OrderQueue {
   constructor(items = []) {
-    this.items = Array.isArray(items) ? [...items] : [];
+    this.items = Array.isArray(items)
+      ? [...items]
+      : [];
   }
 
   enqueue(id) {
-    if (!this.items.includes(id)) this.items.push(id);
+    if (!this.items.includes(id)) {
+      this.items.push(id);
+    }
   }
 
   dequeue() {
@@ -105,7 +216,9 @@ class OrderQueue {
   }
 
   remove(id) {
-    this.items = this.items.filter(value => value !== id);
+    this.items = this.items.filter(
+      item => item !== id
+    );
   }
 
   toArray() {
@@ -117,36 +230,72 @@ class OrderQueue {
   }
 }
 
-let orderQueue = new OrderQueue();
+orderQueue = new OrderQueue();
 
-/* DEFAULT PRODUCTS */
+/* =========================================================
+   4. DEFAULT PRODUCTS AND ADMIN ACCOUNT
+========================================================= */
 
 const defaultProducts = [
-  { name: "Classic Red Roses", category: "Rose", description: "A beautiful bouquet of romantic red roses.", price: 850, stock: 20, image: "🌹" },
-  { name: "Pink Rose Bouquet", category: "Rose", description: "Soft pink roses for thoughtful occasions.", price: 950, stock: 15, image: "🌸" },
-  { name: "Golden Sunflowers", category: "Sunflower", description: "Bright sunflowers to bring happiness.", price: 750, stock: 18, image: "🌻" },
-  { name: "Purple Tulips", category: "Tulip", description: "Elegant purple tulips for special moments.", price: 1100, stock: 12, image: "🌷" },
-  { name: "Mixed Flower Bouquet", category: "Mixed Bouquet", description: "A colorful arrangement of seasonal flowers.", price: 1250, stock: 10, image: "💐" },
-  { name: "White Lily Arrangement", category: "Other", description: "Elegant white lilies with a graceful finish.", price: 980, stock: 14, image: "🪷" },
-  { name: "Pastel Garden Bouquet", category: "Mixed Bouquet", description: "A soft blend of pastel blooms for thoughtful celebrations.", price: 1350, stock: 9, image: "💐" },
-  { name: "White Rose Bouquet", category: "Rose", description: "Classic white roses for sincere and graceful gestures.", price: 1050, stock: 11, image: "🤍" },
-  { name: "Peach Rose Bouquet", category: "Rose", description: "Warm peach roses for birthdays and heartfelt gifts.", price: 990, stock: 13, image: "🌹" },
-  { name: "Yellow Tulip Bouquet", category: "Tulip", description: "Cheerful yellow tulips to brighten someone's day.", price: 1150, stock: 8, image: "🌷" },
-  { name: "Pink Tulip Bouquet", category: "Tulip", description: "Fresh pink tulips arranged with a delicate finish.", price: 1180, stock: 10, image: "🌷" },
-  { name: "Sunflower Delight", category: "Sunflower", description: "A radiant sunflower arrangement full of warmth.", price: 890, stock: 16, image: "🌻" },
-  { name: "Blush Carnation Bouquet", category: "Other", description: "Soft carnations arranged for appreciation and care.", price: 780, stock: 17, image: "🌸" },
-  { name: "Premium Mixed Roses", category: "Mixed Bouquet", description: "A premium mix of roses in complementary colors.", price: 1480, stock: 7, image: "💐" },
-  { name: "Seasonal Floral Basket", category: "Mixed Bouquet", description: "A charming basket of seasonal flowers and greenery.", price: 1650, stock: 6, image: "🧺" }
+  {
+    name: "Classic Red Roses",
+    category: "Rose",
+    description: "A beautiful bouquet of romantic red roses.",
+    price: 850,
+    stock: 20,
+    image: "🌹"
+  },
+  {
+    name: "Pink Rose Bouquet",
+    category: "Rose",
+    description: "Soft pink roses for thoughtful occasions.",
+    price: 950,
+    stock: 15,
+    image: "🌸"
+  },
+  {
+    name: "Golden Sunflowers",
+    category: "Sunflower",
+    description: "Bright sunflowers to bring happiness.",
+    price: 750,
+    stock: 18,
+    image: "🌻"
+  },
+  {
+    name: "Purple Tulips",
+    category: "Tulip",
+    description: "Elegant purple tulips for special moments.",
+    price: 1100,
+    stock: 12,
+    image: "🌷"
+  },
+  {
+    name: "Mixed Flower Bouquet",
+    category: "Mixed Bouquet",
+    description: "A colorful arrangement of seasonal flowers.",
+    price: 1250,
+    stock: 10,
+    image: "💐"
+  },
+  {
+    name: "White Lily Arrangement",
+    category: "Other",
+    description: "Elegant white lilies with a graceful finish.",
+    price: 980,
+    stock: 14,
+    image: "🪷"
+  }
 ];
-
-/* INITIALIZATION AND STORAGE */
 
 function initializeData() {
   users = read(DB.users, []);
   products = read(DB.products, []);
   orders = read(DB.orders, []);
   carts = read(DB.carts, {});
-  orderQueue = new OrderQueue(read(DB.queue, []));
+
+  orderQueue = new OrderQueue(
+    read(DB.queue, [])
+  );
 
   const counters = read(DB.counters, {});
 
@@ -154,48 +303,60 @@ function initializeData() {
   if (!Array.isArray(products)) products = [];
   if (!Array.isArray(orders)) orders = [];
 
-  if (!carts || typeof carts !== "object" || Array.isArray(carts)) {
+  if (
+    !carts ||
+    typeof carts !== "object" ||
+    Array.isArray(carts)
+  ) {
     carts = {};
   }
 
   if (!products.length) {
-    products = defaultProducts.map((p, i) => ({ ...p, id: i + 1 }));
+    products = defaultProducts.map((product, index) => ({
+      ...product,
+      id: index + 1
+    }));
   }
 
-  users = users.map(u => ({
-    ...u,
-    active: u.active !== false,
-    role: u.role || "customer"
+  users = users.map(user => ({
+    ...user,
+    active: user.active !== false,
+    role: user.role || "customer"
   }));
 
-  products = products.map(p => ({
-    ...p,
-    id: Number(p.id),
-    price: Number(p.price) || 0,
-    stock: Math.max(0, Number(p.stock) || 0)
-  }));
-
-  orders = orders.map(o => ({
-    ...o,
-    id: Number(o.id),
-    items: Array.isArray(o.items) ? o.items : [],
-    status: o.status || "Pending"
+  orders = orders.map(order => ({
+    ...order,
+    items: Array.isArray(order.items)
+      ? order.items
+      : [],
+    status: order.status || "Pending"
   }));
 
   nextProductId = Math.max(
     Number(counters.product) || 1,
-    ...products.map(p => Number(p.id) + 1),
+    ...products.map(product =>
+      (Number(product.id) || 0) + 1
+    ),
     1
   );
 
   nextOrderId = Math.max(
     Number(counters.order) || 1,
-    ...orders.map(o => Number(o.id) + 1),
+    ...orders.map(order =>
+      (Number(order.id) || 0) + 1
+    ),
     1
   );
 
-  if (!users.some(u => u.role === "admin")) {
-    const adminId = Math.max(0, ...users.map(u => Number(u.id) || 0)) + 1;
+  const hasAdmin = users.some(
+    user => user.role === "admin"
+  );
+
+  if (!hasAdmin) {
+    const adminId = Math.max(
+      0,
+      ...users.map(user => Number(user.id) || 0)
+    ) + 1;
 
     users.push({
       id: adminId,
@@ -210,190 +371,224 @@ function initializeData() {
     });
   }
 
-  const pending = orders
-    .filter(o => o.status === "Pending")
-    .map(o => o.id);
+  // Keep only pending orders in the FIFO queue.
+  const pendingIds = orders
+    .filter(order => order.status === "Pending")
+    .map(order => order.id);
 
-  const old = orderQueue.toArray();
+  const savedQueue = orderQueue.toArray();
 
   orderQueue = new OrderQueue([
-    ...old.filter(id => pending.includes(id)),
-    ...pending.filter(id => !old.includes(id))
+    ...savedQueue.filter(id =>
+      pendingIds.includes(id)
+    ),
+    ...pendingIds.filter(id =>
+      !savedQueue.includes(id)
+    )
   ]);
 
   saveAll();
 }
 
-/* CUSTOMER CART STORAGE */
-
-function getCart() {
-  if (!currentUser) return [];
-
-  if (!Array.isArray(carts[currentUser.id])) {
-    carts[currentUser.id] = [];
-  }
-
-  return carts[currentUser.id];
-}
-
-function setCart(value) {
-  if (!currentUser) return false;
-
-  const previous = JSON.stringify(carts[currentUser.id] || []);
-  carts[currentUser.id] = value;
-
-  if (!save(DB.carts, carts)) {
-    carts[currentUser.id] = JSON.parse(previous);
-    return false;
-  }
-
-  updateCartCount();
-  return true;
-}
-
-function updateCartCount() {
-  const count = getCart().reduce(
-    (sum, item) => sum + Number(item.quantity || 0),
-    0
-  );
-
-  if ($("cartCount")) $("cartCount").textContent = count;
-}
-
-/* AUTHENTICATION */
+/* =========================================================
+   5. AUTHENTICATION
+========================================================= */
 
 function showLogin() {
+  if (!$("loginForm")) return;
+
   $("loginForm").classList.remove("hidden");
   $("registerForm").classList.add("hidden");
+
   $("loginMessage").textContent = "";
 }
 
 function showRegister() {
+  if (!$("registerForm")) return;
+
   $("loginForm").classList.add("hidden");
   $("registerForm").classList.remove("hidden");
+
   $("registerMessage").textContent = "";
 }
 
 function showAuth() {
   $("authScreen").classList.remove("hidden");
   $("appScreen").classList.add("hidden");
+
   showLogin();
 }
 
 function login(username, password) {
-  const user = users.find(u =>
-    u.username.toLowerCase() === username.toLowerCase() &&
-    u.password === password
+  const user = users.find(item =>
+    item.username.toLowerCase() ===
+      username.toLowerCase() &&
+    item.password === password
   );
 
   if (!user) {
-    $("loginMessage").textContent = "Incorrect username or password.";
+    $("loginMessage").textContent =
+      "Incorrect username or password.";
     return;
   }
 
   if (user.active === false) {
-    $("loginMessage").textContent = "Your account has been disabled.";
+    $("loginMessage").textContent =
+      "Your account has been disabled.";
     return;
   }
 
   currentUser = user;
   currentRole = user.role;
+
   user.lastLogin = new Date().toISOString();
 
   if (!save(DB.users, users)) return;
-  if (!save(DB.session, { userId: user.id })) return;
+
+  if (!save(DB.session, {
+    userId: user.id
+  })) {
+    currentUser = null;
+    currentRole = null;
+    return;
+  }
 
   openApplication();
 }
 
-$("loginForm").addEventListener("submit", event => {
-  event.preventDefault();
-  login($("loginUsername").value.trim(), $("loginPassword").value);
-});
+if ($("loginForm")) {
+  $("loginForm").addEventListener("submit", event => {
+    event.preventDefault();
 
-$("registerForm").addEventListener("submit", event => {
-  event.preventDefault();
+    login(
+      $("loginUsername").value.trim(),
+      $("loginPassword").value
+    );
+  });
+}
 
-  const fullName = $("registerName").value.trim();
-  const username = $("registerUsername").value.trim();
-  const password = $("registerPassword").value;
-  const confirmPassword = $("registerConfirm").value;
+if ($("registerForm")) {
+  $("registerForm").addEventListener("submit", event => {
+    event.preventDefault();
 
-  if (fullName.length < 2 || fullName.length > 100) {
-    return $("registerMessage").textContent = "Enter a valid full name.";
-  }
+    const fullName = $("registerName").value.trim();
+    const username = $("registerUsername").value.trim();
+    const password = $("registerPassword").value;
+    const confirm = $("registerConfirm").value;
 
-  if (!/^[a-zA-Z0-9_.-]{3,30}$/.test(username)) {
-    return $("registerMessage").textContent =
-      "Username must be 3–30 characters using letters, numbers, dots, underscores or hyphens.";
-  }
+    if (fullName.length < 2 || fullName.length > 100) {
+      $("registerMessage").textContent =
+        "Enter a valid full name.";
+      return;
+    }
 
-  if (password.length < 6) {
-    return $("registerMessage").textContent =
-      "Password must contain at least 6 characters.";
-  }
+    if (!/^[a-zA-Z0-9_.-]{3,30}$/.test(username)) {
+      $("registerMessage").textContent =
+        "Username must be 3–30 characters and use letters, numbers, dots, underscores or hyphens.";
+      return;
+    }
 
-  if (password !== confirmPassword) {
-    return $("registerMessage").textContent = "Passwords do not match.";
-  }
+    if (password.length < 6) {
+      $("registerMessage").textContent =
+        "Password must contain at least 6 characters.";
+      return;
+    }
 
-  if (users.some(u => u.username.toLowerCase() === username.toLowerCase())) {
-    return $("registerMessage").textContent = "Username is already taken.";
-  }
+    if (password !== confirm) {
+      $("registerMessage").textContent =
+        "Passwords do not match.";
+      return;
+    }
 
-  const user = {
-    id: Math.max(0, ...users.map(u => Number(u.id) || 0)) + 1,
-    fullName,
-    username,
-    password,
-    role: "customer",
-    active: true,
-    phone: "",
-    address: "",
-    createdAt: new Date().toISOString()
-  };
+    if (users.some(user =>
+      user.username.toLowerCase() ===
+      username.toLowerCase()
+    )) {
+      $("registerMessage").textContent =
+        "Username is already taken.";
+      return;
+    }
 
-  users.push(user);
+    const user = {
+      id: Math.max(
+        0,
+        ...users.map(item => Number(item.id) || 0)
+      ) + 1,
 
-  if (!save(DB.users, users)) {
-    users.pop();
-    return;
-  }
+      fullName,
+      username,
+      password,
+      role: "customer",
+      active: true,
+      phone: "",
+      address: "",
+      createdAt: new Date().toISOString()
+    };
 
-  $("registerForm").reset();
-  $("loginUsername").value = username;
-  showLogin();
-  $("loginMessage").textContent =
-    "Account created successfully. Please log in.";
-});
+    users.push(user);
 
-$("showRegister").addEventListener("click", showRegister);
-$("showLogin").addEventListener("click", showLogin);
+    if (!save(DB.users, users)) {
+      users.pop();
+      return;
+    }
+
+    $("registerForm").reset();
+    $("loginUsername").value = username;
+
+    showLogin();
+
+    $("loginMessage").textContent =
+      "Account created successfully. Please log in.";
+  });
+}
 
 document.querySelectorAll(".toggle-password").forEach(button => {
   button.addEventListener("click", () => {
     const input = $(button.dataset.target);
-    input.type = input.type === "password" ? "text" : "password";
-    button.textContent = input.type === "password" ? "Show" : "Hide";
+
+    if (!input) return;
+
+    input.type =
+      input.type === "password"
+        ? "text"
+        : "password";
+
+    button.textContent =
+      input.type === "password"
+        ? "Show"
+        : "Hide";
   });
 });
 
 function logout() {
-  if (!confirm("Are you sure you want to log out?")) return;
+  if (!confirm("Are you sure you want to log out?")) {
+    return;
+  }
 
   localStorage.removeItem(DB.session);
+
   currentUser = null;
   currentRole = null;
+
   showAuth();
   notify("You have logged out.");
 }
 
-$("logoutButton").addEventListener("click", logout);
+if ($("logoutButton")) {
+  $("logoutButton").addEventListener("click", logout);
+}
 
 function restoreSession() {
   const session = read(DB.session, null);
-  const user = session && users.find(u =>
-    u.id === session.userId && u.active !== false
+
+  if (!session) {
+    showAuth();
+    return;
+  }
+
+  const user = users.find(item =>
+    item.id === session.userId &&
+    item.active !== false
   );
 
   if (!user) {
@@ -404,59 +599,94 @@ function restoreSession() {
 
   currentUser = user;
   currentRole = user.role;
+
   openApplication();
 }
 
-/* NAVIGATION */
+/* =========================================================
+   6. MAIN APPLICATION AND NAVIGATION
+========================================================= */
 
 function openApplication() {
+  if (!currentUser) return;
+
   $("authScreen").classList.add("hidden");
   $("appScreen").classList.remove("hidden");
 
   $("headerUser").textContent = currentUser.fullName;
   $("welcomeText").textContent = currentUser.fullName;
+
   $("roleLabel").textContent =
-    currentRole === "admin" ? "Administrator" : "Customer";
+    currentRole === "admin"
+      ? "Administrator"
+      : "Customer";
 
-  $("customerNav").classList.toggle("hidden", currentRole !== "customer");
-  $("adminNav").classList.toggle("hidden", currentRole !== "admin");
+  $("customerNav").classList.toggle(
+    "hidden",
+    currentRole !== "customer"
+  );
 
-  currentRole === "admin"
-    ? adminPage("dashboard")
-    : customerPage("shop");
+  $("adminNav").classList.toggle(
+    "hidden",
+    currentRole !== "admin"
+  );
+
+  if (currentRole === "admin") {
+    adminPage("dashboard");
+  } else {
+    customerPage("shop");
+  }
 
   updateCartCount();
 }
 
 function goHome() {
-  currentRole === "admin"
-    ? adminPage("dashboard")
-    : customerPage("shop");
+  if (currentRole === "admin") {
+    adminPage("dashboard");
+  } else {
+    customerPage("shop");
+  }
 }
 
 function closeAllPages() {
-  document.querySelectorAll(".main-content .page").forEach(page => {
+  document.querySelectorAll(
+    ".main-content .page"
+  ).forEach(page => {
     page.classList.add("hidden");
   });
 }
 
 function activateNav(nav, button) {
+  if (!nav) return;
+
   nav.querySelectorAll(".nav-link").forEach(link => {
     link.classList.remove("active");
   });
 
-  if (button) button.classList.add("active");
+  if (button) {
+    button.classList.add("active");
+  }
 }
 
 function setPage(id, title) {
   closeAllPages();
 
   const page = $(id);
+
   if (!page) return;
 
   page.classList.remove("hidden");
-  $("pageTitle").textContent = title;
-  window.scrollTo({ top: 0, behavior: "smooth" });
+
+  if ($("pageTitle")) {
+    $("pageTitle").textContent = title;
+  }
+
+  currentPage = id;
+
+  window.scrollTo({
+    top: 0,
+    behavior: "smooth"
+  });
 }
 
 function customerPage(page, button) {
@@ -478,14 +708,31 @@ function customerPage(page, button) {
 
   setPage(...pages[page]);
 
-  ({
-    shop: renderShop,
-    cart: renderCart,
-    orders: renderCustomerOrders,
-    receipts: renderCustomerReceipts,
-    transactions: renderTransactions,
-    profile: loadProfile
-  })[page]?.();
+  switch (page) {
+    case "shop":
+      renderShop();
+      break;
+
+    case "cart":
+      renderCart();
+      break;
+
+    case "orders":
+      renderCustomerOrders();
+      break;
+
+    case "receipts":
+      renderCustomerReceipts();
+      break;
+
+    case "transactions":
+      renderTransactions();
+      break;
+
+    case "profile":
+      loadProfile();
+      break;
+  }
 }
 
 function adminPage(page, button) {
@@ -506,447 +753,799 @@ function adminPage(page, button) {
 
   setPage(...pages[page]);
 
-  ({
-    dashboard: renderDashboard,
-    products: renderAdminProducts,
-    inventory: renderInventory,
-    orders: renderAdminOrders,
-    users: renderAdminUsers,
-    settings: loadSettings
-  })[page]?.();
+  switch (page) {
+    case "dashboard":
+      renderDashboard();
+      break;
+
+    case "products":
+      renderAdminProducts();
+      break;
+
+    case "inventory":
+      renderInventory();
+      break;
+
+    case "orders":
+      renderAdminOrders();
+      break;
+
+    case "users":
+      renderAdminUsers();
+      break;
+
+    case "settings":
+      loadSettings();
+      break;
+  }
 }
 
 function closeModal(id) {
-  $(id)?.classList.add("hidden");
+  const modal = $(id);
+
+  if (modal) {
+    modal.classList.add("hidden");
+  }
 }
 
+/* Make functions available to HTML onclick attributes. */
+
+window.showLogin = showLogin;
+window.showRegister = showRegister;
 window.goHome = goHome;
 window.customerPage = customerPage;
 window.adminPage = adminPage;
 window.logout = logout;
 window.closeModal = closeModal;
-/* PRODUCT DISPLAY AND SHOP */
 
-function productVisual(product) {
-  const image = String(product.image || "🌸").trim();
+/* =========================================================
+   7. PRODUCT IMAGE AND PRODUCT CARD
+========================================================= */
 
-  return /^https?:\/\//i.test(image) || /^data:image\//i.test(image)
-    ? `<div class="product-image"><img src="${esc(image)}" alt="${esc(product.name)}" onerror="this.parentElement.textContent='🌸'"></div>`
-    : `<div class="product-image">${esc(image)}</div>`;
+function isImageSource(value) {
+  const image = String(value || "").trim();
+
+  return (
+    /^https?:\/\//i.test(image) ||
+    /^data:image\//i.test(image)
+  );
 }
 
-function productCard(p) {
-  const unavailable = p.stock <= 0;
+function productVisual(product, className = "product-image") {
+  const image = String(product.image || "").trim();
+
+  if (isImageSource(image)) {
+    return `
+      <div class="${className}">
+        <img
+          src="${escapeHTML(image)}"
+          alt="${escapeHTML(product.name)}"
+          onerror="this.parentElement.textContent='🌸'"
+        >
+      </div>
+    `;
+  }
+
+  return `
+    <div class="${className}">
+      ${escapeHTML(image || "🌸")}
+    </div>
+  `;
+}
+
+function productCard(product) {
+  const outOfStock = Number(product.stock) <= 0;
 
   return `
     <article class="product-card">
-      ${productVisual(p)}
+
+      ${productVisual(product)}
+
       <div class="product-info">
-        <h3>${esc(p.name)}</h3>
-        <p>${esc(p.description || p.category)}</p>
+
+        <h3>${escapeHTML(product.name)}</h3>
+
+        <p>
+          ${escapeHTML(
+            product.description || product.category
+          )}
+        </p>
+
         <div class="product-meta">
-          <span class="price">${money(p.price)}</span>
-          <span class="stock">${unavailable ? "Out of stock" : `${p.stock} available`}</span>
+
+          <span class="price">
+            ${money(product.price)}
+          </span>
+
+          <span class="stock">
+            ${
+              outOfStock
+                ? "Out of stock"
+                : `${product.stock} available`
+            }
+          </span>
+
         </div>
+
         <div class="quantity-row">
-          <input type="number" min="1" max="${p.stock}" value="1"
-            data-quantity="${p.id}" aria-label="Quantity"
-            ${unavailable ? "disabled" : ""}>
-          <button class="btn btn-primary" data-add-cart="${p.id}"
-            ${unavailable ? "disabled" : ""}>Add to Cart</button>
+
+          <input
+            type="number"
+            min="1"
+            max="${product.stock}"
+            value="1"
+            aria-label="Quantity for ${escapeHTML(product.name)}"
+            data-quantity="${product.id}"
+            ${outOfStock ? "disabled" : ""}
+          >
+
+          <button
+            class="btn btn-primary"
+            type="button"
+            data-add-cart="${product.id}"
+            ${outOfStock ? "disabled" : ""}
+          >
+            Add to Cart
+          </button>
+
         </div>
-        <button class="btn btn-outline full" data-buy-now="${p.id}"
-          ${unavailable ? "disabled" : ""}>Buy Now</button>
+
+        <button
+          class="btn btn-outline full"
+          type="button"
+          data-buy-now="${product.id}"
+          ${outOfStock ? "disabled" : ""}
+        >
+          Buy Now
+        </button>
+
       </div>
     </article>
   `;
 }
 
+function bindShopActions(container) {
+  if (!container) return;
+
+  container.querySelectorAll("[data-add-cart]").forEach(button => {
+    button.addEventListener("click", () => {
+      const id = Number(button.dataset.addCart);
+
+      const quantityInput = container.querySelector(
+        `[data-quantity="${id}"]`
+      );
+
+      addToCart(
+        id,
+        Number(quantityInput?.value || 1)
+      );
+    });
+  });
+
+  container.querySelectorAll("[data-buy-now]").forEach(button => {
+    button.addEventListener("click", () => {
+      const id = Number(button.dataset.buyNow);
+
+      const quantityInput = container.querySelector(
+        `[data-quantity="${id}"]`
+      );
+
+      addToCart(
+        id,
+        Number(quantityInput?.value || 1)
+      );
+
+      if (getCart().some(item =>
+        item.productId === id
+      )) {
+        customerPage("cart");
+      }
+    });
+  });
+}
+
+/* END OF PART 1 */
+/* =========================================================
+   8. CUSTOMER SHOP
+========================================================= */
+
 function renderShop() {
   if (currentRole !== "customer") return;
 
-  const query = $("productSearch").value.toLowerCase().trim();
+  const searchInput = $("productSearch");
 
-  const list = products.filter(p =>
-    [p.name, p.category, p.description].some(value =>
-      String(value || "").toLowerCase().includes(query)
-    )
+  const query = searchInput
+    ? searchInput.value.toLowerCase().trim()
+    : "";
+
+  const list = products.filter(product =>
+    String(product.name || "").toLowerCase().includes(query) ||
+    String(product.category || "").toLowerCase().includes(query) ||
+    String(product.description || "").toLowerCase().includes(query)
   );
 
   $("shopProducts").innerHTML = list.length
     ? list.map(productCard).join("")
     : '<div class="empty-state">No flowers found.</div>';
 
-  $("shopProducts").querySelectorAll("[data-add-cart],[data-buy-now]")
-    .forEach(button => {
-      button.addEventListener("click", () => {
-        const id = Number(button.dataset.addCart || button.dataset.buyNow);
-        const qty = Number(
-          $("shopProducts").querySelector(`[data-quantity="${id}"]`)?.value || 1
-        );
-
-        const added = addToCart(id, qty);
-
-        if (button.hasAttribute("data-buy-now") && added) {
-          customerPage("cart");
-        }
-      });
-    });
+  bindShopActions($("shopProducts"));
 }
 
-$("productSearch").addEventListener("input", renderShop);
+if ($("productSearch")) {
+  $("productSearch").addEventListener("input", renderShop);
+}
 
-function addToCart(id, quantity) {
+/* =========================================================
+   9. SHOPPING CART
+========================================================= */
+
+function addToCart(productId, quantity) {
   if (currentRole !== "customer") return false;
 
-  const p = products.find(item => item.id === id);
+  const product = products.find(
+    item => Number(item.id) === Number(productId)
+  );
 
-  if (!p || !Number.isInteger(quantity) || quantity < 1) {
+  if (
+    !product ||
+    !Number.isInteger(quantity) ||
+    quantity < 1
+  ) {
     notify("Please enter a valid quantity.", "error");
     return false;
   }
 
-  const cart = getCart();
-  const existing = cart.find(item => item.productId === id);
-  const newQty = (existing?.quantity || 0) + quantity;
-
-  if (newQty > p.stock) {
-    notify("Cart quantity exceeds available stock.", "error");
+  if (quantity > product.stock) {
+    notify("Not enough stock available.", "error");
     return false;
   }
 
-  const updated = cart.map(item => ({ ...item }));
-  const found = updated.find(item => item.productId === id);
+  const cart = getCart();
 
-  if (found) {
-    found.quantity = newQty;
-  } else {
-    updated.push({ productId: id, quantity });
+  const existing = cart.find(
+    item => Number(item.productId) === Number(productId)
+  );
+
+  const newQuantity =
+    Number(existing?.quantity || 0) + quantity;
+
+  if (newQuantity > product.stock) {
+    notify(
+      "Cart quantity exceeds available stock.",
+      "error"
+    );
+
+    return false;
   }
+
+  // Create a new cart instead of mutating the original.
+  const updated = existing
+    ? cart.map(item =>
+        Number(item.productId) === Number(productId)
+          ? { ...item, quantity: newQuantity }
+          : { ...item }
+      )
+    : [
+        ...cart,
+        {
+          productId: product.id,
+          quantity
+        }
+      ];
 
   if (!setCart(updated)) return false;
 
   renderShop();
+
   notify("Flower added to your cart.");
+
   return true;
 }
 
-function removeFromCart(id) {
-  if (setCart(getCart().filter(item => item.productId !== id))) {
+function updateCartCount() {
+  const count = getCart().reduce(
+    (sum, item) => sum + Number(item.quantity || 0),
+    0
+  );
+
+  if ($("cartCount")) {
+    $("cartCount").textContent = count;
+  }
+}
+
+function removeFromCart(productId) {
+  const updated = getCart().filter(
+    item => Number(item.productId) !== Number(productId)
+  );
+
+  if (setCart(updated)) {
     renderCart();
     notify("Product removed from cart.");
   }
 }
 
-function changeCartQuantity(id, qty) {
-  const p = products.find(item => item.id === id);
+function changeCartQuantity(productId, quantity) {
+  const product = products.find(
+    item => Number(item.id) === Number(productId)
+  );
 
-  if (!p || !Number.isInteger(qty) || qty < 1 || qty > p.stock) {
-    notify("Please enter a valid quantity within available stock.", "error");
+  if (
+    !product ||
+    !Number.isInteger(quantity) ||
+    quantity < 1
+  ) {
+    renderCart();
+
+    notify("Please enter a valid quantity.", "error");
+    return;
+  }
+
+  if (quantity > product.stock) {
+    notify(
+      "Quantity exceeds available stock.",
+      "error"
+    );
+
     renderCart();
     return;
   }
 
-  setCart(getCart().map(item =>
-    item.productId === id ? { ...item, quantity: qty } : item
-  ));
+  const updated = getCart().map(item =>
+    Number(item.productId) === Number(productId)
+      ? { ...item, quantity }
+      : { ...item }
+  );
 
-  renderCart();
+  if (setCart(updated)) {
+    renderCart();
+  }
 }
 
 function renderCart() {
   if (currentRole !== "customer") return;
 
-  const items = getCart()
-    .map(item => ({
-      ...item,
-      product: products.find(p => p.id === item.productId)
-    }))
-    .filter(item => item.product);
+  const cart = getCart();
 
-  if (!items.length) {
+  const validItems = cart.map(item => ({
+    ...item,
+    product: products.find(
+      product =>
+        Number(product.id) === Number(item.productId)
+    )
+  })).filter(item => item.product);
+
+  if (!validItems.length) {
     $("cartContent").innerHTML = `
       <div class="empty-state">
         <strong>Your cart is empty.</strong>
-        <span>Browse our flower collection and add your favorites.</span>
-        <button class="btn btn-primary" onclick="customerPage('shop')">
+
+        <p>
+          Browse our flower collection and add your favorites.
+        </p>
+
+        <button
+          class="btn btn-primary"
+          type="button"
+          onclick="customerPage('shop')"
+        >
           Continue Shopping
         </button>
       </div>
     `;
+
+    updateCartCount();
     return;
   }
 
-  const total = items.reduce(
-    (sum, item) => sum + item.product.price * item.quantity,
+  const total = validItems.reduce(
+    (sum, item) =>
+      sum + Number(item.product.price) * item.quantity,
     0
   );
 
   $("cartContent").innerHTML = `
     <div class="cart-layout">
+
       <div>
-        ${items.map(item => `
+
+        ${validItems.map(item => `
           <div class="cart-item">
+
             <div class="cart-thumb">
               ${
-                /^https?:\/\//i.test(item.product.image || "") ||
-                /^data:image\//i.test(item.product.image || "")
-                  ? `<img src="${esc(item.product.image)}" alt="${esc(item.product.name)}">`
-                  : esc(item.product.image || "🌸")
+                isImageSource(item.product.image)
+                  ? `
+                    <img
+                      src="${escapeHTML(item.product.image)}"
+                      alt="${escapeHTML(item.product.name)}"
+                    >
+                  `
+                  : escapeHTML(item.product.image || "🌸")
               }
             </div>
+
             <div class="cart-detail">
-              <strong>${esc(item.product.name)}</strong>
-              <small>${money(item.product.price)} each</small>
+
+              <strong>
+                ${escapeHTML(item.product.name)}
+              </strong>
+
+              <small>
+                ${money(item.product.price)} each
+              </small>
+
             </div>
-            <input type="number" min="1" max="${item.product.stock}"
-              value="${item.quantity}" data-cart-quantity="${item.productId}"
-              aria-label="Cart quantity">
-            <strong>${money(item.product.price * item.quantity)}</strong>
-            <button class="btn-danger" data-remove-cart="${item.productId}">
+
+            <input
+              type="number"
+              min="1"
+              max="${item.product.stock}"
+              value="${item.quantity}"
+              aria-label="Cart quantity"
+              data-cart-quantity="${item.productId}"
+            >
+
+            <strong>
+              ${money(item.product.price * item.quantity)}
+            </strong>
+
+            <button
+              class="btn-danger"
+              type="button"
+              data-remove-cart="${item.productId}"
+            >
               Remove
             </button>
+
           </div>
         `).join("")}
+
       </div>
 
       <aside class="cart-summary">
+
         <h2>Order Summary</h2>
+
         <div class="summary-line">
           <span>Items</span>
-          <span>${items.reduce((sum, item) => sum + item.quantity, 0)}</span>
+
+          <span>
+            ${validItems.reduce(
+              (sum, item) => sum + item.quantity,
+              0
+            )}
+          </span>
         </div>
+
         <div class="summary-line summary-total">
           <span>Total</span>
           <span>${money(total)}</span>
         </div>
-        <button class="btn btn-primary full" id="cartCheckout">
+
+        <button
+          class="btn btn-primary full"
+          id="cartCheckout"
+          type="button"
+        >
           Proceed to Checkout
         </button>
-        <button class="btn btn-outline full" onclick="customerPage('shop')">
+
+        <button
+          class="btn btn-outline full"
+          type="button"
+          onclick="customerPage('shop')"
+        >
           Continue Shopping
         </button>
+
       </aside>
+
     </div>
   `;
 
-  $("cartContent").querySelectorAll("[data-cart-quantity]")
-    .forEach(input => {
-      input.addEventListener("change", () =>
-        changeCartQuantity(
-          Number(input.dataset.cartQuantity),
-          Number(input.value)
-        )
+  $("cartContent").querySelectorAll(
+    "[data-cart-quantity]"
+  ).forEach(input => {
+    input.addEventListener("change", () => {
+      changeCartQuantity(
+        Number(input.dataset.cartQuantity),
+        Number(input.value)
       );
     });
+  });
 
-  $("cartContent").querySelectorAll("[data-remove-cart]")
-    .forEach(button => {
-      button.addEventListener("click", () =>
-        removeFromCart(Number(button.dataset.removeCart))
+  $("cartContent").querySelectorAll(
+    "[data-remove-cart]"
+  ).forEach(button => {
+    button.addEventListener("click", () => {
+      removeFromCart(
+        Number(button.dataset.removeCart)
       );
     });
+  });
 
-  $("cartCheckout").addEventListener("click", openCheckout);
+  $("cartCheckout").addEventListener(
+    "click",
+    openCheckout
+  );
 }
 
-/* CHECKOUT AND ORDER PLACEMENT */
+/* =========================================================
+   10. CHECKOUT
+========================================================= */
 
 function openCheckout() {
+  if (currentRole !== "customer") return;
+
   const cart = getCart();
+
+  if (!cart.length) {
+    notify("Your cart is empty.", "error");
+    return;
+  }
 
   const items = cart.map(item => ({
     ...item,
-    product: products.find(p => p.id === item.productId)
+    product: products.find(
+      product =>
+        Number(product.id) === Number(item.productId)
+    )
   }));
 
-  if (!items.length) {
-    return notify("Your cart is empty.", "error");
-  }
+  const unavailable = items.some(item =>
+    !item.product ||
+    !Number.isInteger(item.quantity) ||
+    item.quantity < 1 ||
+    item.quantity > item.product.stock
+  );
 
-  if (items.some(item =>
-    !item.product || item.quantity > item.product.stock
-  )) {
-    return notify(
-      "Some cart items are unavailable. Please update your cart.",
+  if (unavailable) {
+    notify(
+      "Please update your cart. Some items are unavailable.",
       "error"
     );
+
+    renderCart();
+    return;
   }
 
   const total = items.reduce(
-    (sum, item) => sum + item.product.price * item.quantity,
+    (sum, item) =>
+      sum + item.product.price * item.quantity,
     0
   );
 
   $("checkoutSummary").innerHTML = `
     <div class="cart-summary">
+
       ${items.map(item => `
         <div class="summary-line">
-          <span>${esc(item.product.name)} × ${item.quantity}</span>
-          <strong>${money(item.product.price * item.quantity)}</strong>
+
+          <span>
+            ${escapeHTML(item.product.name)}
+            × ${item.quantity}
+          </span>
+
+          <strong>
+            ${money(item.product.price * item.quantity)}
+          </strong>
+
         </div>
       `).join("")}
+
       <div class="summary-line summary-total">
         <span>Total</span>
         <strong>${money(total)}</strong>
       </div>
+
     </div>
   `;
 
-  $("checkoutName").value = currentUser.fullName || "";
-  $("checkoutPhone").value = currentUser.phone || "";
-  $("checkoutAddress").value = currentUser.address || "";
+  $("checkoutName").value =
+    currentUser.fullName || "";
+
+  $("checkoutPhone").value =
+    currentUser.phone || "";
+
+  $("checkoutAddress").value =
+    currentUser.address || "";
 
   $("checkoutModal").classList.remove("hidden");
 }
 
-$("checkoutForm").addEventListener("submit", event => {
-  event.preventDefault();
+if ($("checkoutForm")) {
+  $("checkoutForm").addEventListener("submit", event => {
+    event.preventDefault();
 
-  if (currentRole !== "customer") return;
+    if (currentRole !== "customer") return;
 
-  const name = $("checkoutName").value.trim();
-  const phone = $("checkoutPhone").value.trim();
-  const address = $("checkoutAddress").value.trim();
+    const name = $("checkoutName").value.trim();
+    const phone = $("checkoutPhone").value.trim();
+    const address = $("checkoutAddress").value.trim();
 
-  if (name.length < 2 || name.length > 100) {
-    return notify("Please enter a valid name.", "error");
-  }
-
-  if (!validPhone(phone)) {
-    return notify("Please enter a valid phone number.", "error");
-  }
-
-  if (address.length < 8 || address.length > 300) {
-    return notify("Please enter a complete delivery address.", "error");
-  }
-
-  const cart = getCart();
-
-  if (!cart.length) {
-    return notify("Your cart is empty.", "error");
-  }
-
-  const items = [];
-
-  for (const ci of cart) {
-    const p = products.find(x => x.id === ci.productId);
-
-    if (
-      !p ||
-      !Number.isInteger(ci.quantity) ||
-      ci.quantity < 1 ||
-      ci.quantity > p.stock
-    ) {
-      return notify(
-        "An item is unavailable or has insufficient stock.",
-        "error"
-      );
+    if (name.length < 2 || name.length > 100) {
+      notify("Please enter a valid name.", "error");
+      return;
     }
 
-    items.push({
-      productId: p.id,
-      name: p.name,
-      image: p.image,
-      price: p.price,
-      quantity: ci.quantity,
-      subtotal: p.price * ci.quantity
+    if (!validPhone(phone)) {
+      notify("Please enter a valid phone number.", "error");
+      return;
+    }
+
+    if (address.length < 8 || address.length > 300) {
+      notify(
+        "Please enter a complete delivery address.",
+        "error"
+      );
+
+      return;
+    }
+
+    const cart = getCart();
+
+    if (!cart.length) {
+      closeModal("checkoutModal");
+      notify("Your cart is empty.", "error");
+      return;
+    }
+
+    const items = [];
+
+    for (const cartItem of cart) {
+      const product = products.find(
+        item =>
+          Number(item.id) === Number(cartItem.productId)
+      );
+
+      if (
+        !product ||
+        !Number.isInteger(cartItem.quantity) ||
+        cartItem.quantity < 1 ||
+        cartItem.quantity > product.stock
+      ) {
+        notify(
+          "An item is unavailable or has insufficient stock.",
+          "error"
+        );
+
+        return;
+      }
+
+      items.push({
+        productId: product.id,
+        name: product.name,
+        image: product.image,
+        price: product.price,
+        quantity: cartItem.quantity,
+        subtotal: product.price * cartItem.quantity
+      });
+    }
+
+    const total = items.reduce(
+      (sum, item) => sum + item.subtotal,
+      0
+    );
+
+    // Save original data for rollback.
+    const oldProducts = products.map(
+      product => ({ ...product })
+    );
+
+    const oldOrders = [...orders];
+    const oldQueue = orderQueue.toArray();
+    const oldId = nextOrderId;
+    const oldCarts = JSON.parse(JSON.stringify(carts));
+
+    const oldUser = {
+      fullName: currentUser.fullName,
+      phone: currentUser.phone,
+      address: currentUser.address
+    };
+
+    // Deduct stock.
+    items.forEach(item => {
+      const product = products.find(
+        p => Number(p.id) === Number(item.productId)
+      );
+
+      product.stock -= item.quantity;
     });
-  }
 
-  const total = items.reduce((sum, item) => sum + item.subtotal, 0);
+    const order = {
+      id: nextOrderId++,
+      customerId: currentUser.id,
+      customerName: name,
+      phone,
+      address,
+      payment: "Cash on Delivery",
+      items,
+      total,
+      status: "Pending",
+      date: new Date().toISOString()
+    };
 
-  const snapshot = {
-    products: products.map(p => ({ ...p })),
-    orders: [...orders],
-    queue: orderQueue.toArray(),
-    nextOrderId,
-    carts: JSON.parse(JSON.stringify(carts)),
-    user: { ...currentUser }
-  };
+    orders.unshift(order);
 
-  items.forEach(item => {
-    products.find(p => p.id === item.productId).stock -= item.quantity;
-  });
+    // Add new order to the FIFO queue.
+    orderQueue.enqueue(order.id);
 
-  const order = {
-    id: nextOrderId++,
-    customerId: currentUser.id,
-    customerName: name,
-    phone,
-    address,
-    payment: "Cash on Delivery",
-    items,
-    total,
-    status: "Pending",
-    date: new Date().toISOString()
-  };
+    // Update customer information.
+    currentUser.fullName = name;
+    currentUser.phone = phone;
+    currentUser.address = address;
 
-  orders.unshift(order);
-  orderQueue.enqueue(order.id);
+    // Empty the customer's cart.
+    carts[currentUser.id] = [];
 
-  currentUser.fullName = name;
-  currentUser.phone = phone;
-  currentUser.address = address;
-  carts[currentUser.id] = [];
+    if (!saveAll()) {
+      products = oldProducts;
+      orders = oldOrders;
+      orderQueue = new OrderQueue(oldQueue);
+      nextOrderId = oldId;
+      carts = oldCarts;
 
-  if (!saveAll()) {
-    products = snapshot.products;
-    orders = snapshot.orders;
-    orderQueue = new OrderQueue(snapshot.queue);
-    nextOrderId = snapshot.nextOrderId;
-    carts = snapshot.carts;
-    Object.assign(currentUser, snapshot.user);
-    return;
-  }
+      Object.assign(currentUser, oldUser);
 
-  $("checkoutForm").reset();
-  closeModal("checkoutModal");
+      return;
+    }
 
-  $("headerUser").textContent = name;
-  $("welcomeText").textContent = name;
+    $("checkoutForm").reset();
 
-  updateCartCount();
-  customerPage("orders");
-  notify(`Order PV-${order.id} placed successfully!`);
-});
-/* ORDERS AND FIFO QUEUE */
+    closeModal("checkoutModal");
 
-function statusClass(status) {
-  return status === "Completed" ? "delivered" :
-    status === "Cancelled" ? "cancelled" : "";
-}
+    $("headerUser").textContent = currentUser.fullName;
+    $("welcomeText").textContent = currentUser.fullName;
 
-function orderItemsText(order) {
-  return order.items.map(i =>
-    `${esc(i.name)} × ${Number(i.quantity) || 0}`
-  ).join("<br>");
-}
+    updateCartCount();
 
-function receiptButton(id, label = "View") {
-  return `<button class="btn-soft" data-view-receipt="${id}">${label}</button>`;
-}
+    customerPage("orders");
 
-function bindReceiptButtons(container) {
-  container.querySelectorAll("[data-view-receipt]").forEach(button => {
-    button.addEventListener("click", () =>
-      showReceipt(Number(button.dataset.viewReceipt))
+    notify(
+      `Order PV-${order.id} placed successfully!`
     );
   });
 }
 
+/* =========================================================
+   11. ORDER DISPLAY AND FIFO PROCESSING
+========================================================= */
+
+function statusClass(status) {
+  if (status === "Completed") return "delivered";
+  if (status === "Cancelled") return "cancelled";
+
+  return "";
+}
+
+function orderItemsText(order) {
+  return (order.items || []).map(item =>
+    `${escapeHTML(item.name)} × ${Number(item.quantity)}`
+  ).join("<br>");
+}
+
 function renderCustomerOrders() {
-  const list = orders.filter(o => o.customerId === currentUser.id);
+  if (!currentUser) return;
+
+  const list = orders.filter(
+    order => order.customerId === currentUser.id
+  );
 
   if (!list.length) {
-    $("customerOrders").innerHTML =
-      '<div class="empty-state">You have no orders yet.</div>';
+    $("customerOrders").innerHTML = `
+      <div class="empty-state">
+        You have no orders yet.
+      </div>
+    `;
+
     return;
   }
 
   $("customerOrders").innerHTML = `
     <div class="table-wrap">
+
       <table>
+
         <thead>
           <tr>
             <th>Order ID</th>
@@ -957,23 +1556,49 @@ function renderCustomerOrders() {
             <th>Receipt</th>
           </tr>
         </thead>
+
         <tbody>
-          ${list.map(o => `
+
+          ${list.map(order => `
             <tr>
-              <td>PV-${o.id}</td>
-              <td>${esc(dateText(o.date))}</td>
-              <td>${orderItemsText(o)}</td>
-              <td>${money(o.total)}</td>
+
+              <td>PV-${order.id}</td>
+
               <td>
-                <span class="status ${statusClass(o.status)}">
-                  ${esc(o.status)}
+                ${escapeHTML(formatDate(order.date))}
+              </td>
+
+              <td>
+                ${orderItemsText(order)}
+              </td>
+
+              <td>
+                ${money(order.total)}
+              </td>
+
+              <td>
+                <span class="status ${statusClass(order.status)}">
+                  ${escapeHTML(order.status)}
                 </span>
               </td>
-              <td>${receiptButton(o.id)}</td>
+
+              <td>
+                <button
+                  class="btn-soft"
+                  type="button"
+                  data-view-receipt="${order.id}"
+                >
+                  View
+                </button>
+              </td>
+
             </tr>
           `).join("")}
+
         </tbody>
+
       </table>
+
     </div>
   `;
 
@@ -981,15 +1606,23 @@ function renderCustomerOrders() {
 }
 
 function renderAdminOrders() {
+  if (currentRole !== "admin") return;
+
   if (!orders.length) {
-    $("adminOrders").innerHTML =
-      '<div class="empty-state">No orders have been placed.</div>';
+    $("adminOrders").innerHTML = `
+      <div class="empty-state">
+        No orders have been placed.
+      </div>
+    `;
+
     return;
   }
 
   $("adminOrders").innerHTML = `
     <div class="table-wrap">
+
       <table>
+
         <thead>
           <tr>
             <th>Order</th>
@@ -1001,57 +1634,116 @@ function renderAdminOrders() {
             <th>Receipt</th>
           </tr>
         </thead>
+
         <tbody>
-          ${orders.map(o => `
+
+          ${orders.map(order => `
             <tr>
+
               <td>
-                <strong>PV-${o.id}</strong><br>
-                <small>${esc(dateText(o.date))}</small>
+                <strong>PV-${order.id}</strong>
+                <br>
+                <small>
+                  ${escapeHTML(formatDate(order.date))}
+                </small>
               </td>
+
               <td>
-                ${esc(o.customerName)}<br>
-                <small>${esc(o.phone)}</small>
+                ${escapeHTML(order.customerName)}
+                <br>
+                <small>
+                  ${escapeHTML(order.phone)}
+                </small>
               </td>
-              <td>${orderItemsText(o)}</td>
-              <td>${money(o.total)}</td>
+
               <td>
-                <span class="status ${statusClass(o.status)}">
-                  ${esc(o.status)}
+                ${orderItemsText(order)}
+              </td>
+
+              <td>
+                ${money(order.total)}
+              </td>
+
+              <td>
+                <span class="status ${statusClass(order.status)}">
+                  ${escapeHTML(order.status)}
                 </span>
               </td>
+
               <td>
-                <select data-order-status="${o.id}" aria-label="Order status">
-                  ${["Pending", "Processing", "Completed", "Cancelled"].map(s => `
-                    <option value="${s}" ${o.status === s ? "selected" : ""}>
-                      ${s}
+                <select
+                  data-order-status="${order.id}"
+                  aria-label="Order status"
+                >
+                  ${[
+                    "Pending",
+                    "Processing",
+                    "Completed",
+                    "Cancelled"
+                  ].map(status => `
+                    <option
+                      value="${status}"
+                      ${order.status === status ? "selected" : ""}
+                    >
+                      ${status}
                     </option>
                   `).join("")}
                 </select>
               </td>
-              <td>${receiptButton(o.id, "Receipt")}</td>
+
+              <td>
+                <button
+                  class="btn-soft"
+                  type="button"
+                  data-view-receipt="${order.id}"
+                >
+                  Receipt
+                </button>
+              </td>
+
             </tr>
           `).join("")}
+
         </tbody>
+
       </table>
+
     </div>
 
-    <div class="cart-summary" style="margin-top:18px">
+    <div class="cart-summary" style="margin-top:20px">
+
       <strong>FIFO Pending Order Queue</strong>
+
       <p class="muted">
-        Next order:
-        ${orderQueue.peek() === null ? "No pending orders" : "PV-" + orderQueue.peek()}
+        Oldest pending order:
+        ${
+          orderQueue.peek() === null
+            ? "No pending orders"
+            : "PV-" + orderQueue.peek()
+        }
       </p>
+
       <p class="muted">
         Queue:
-        ${orderQueue.toArray().map(id => "PV-" + id).join(" → ") || "Empty"}
+        ${
+          orderQueue.toArray()
+            .map(id => "PV-" + id)
+            .join(" → ") || "Empty"
+        }
       </p>
+
     </div>
   `;
 
-  $("adminOrders").querySelectorAll("[data-order-status]").forEach(select => {
-    select.addEventListener("change", () =>
-      updateOrderStatus(Number(select.dataset.orderStatus), select.value)
-    );
+  $("adminOrders").querySelectorAll(
+    "[data-order-status]"
+  ).forEach(select => {
+    select.addEventListener("change", () => {
+      updateOrderStatus(
+        Number(select.dataset.orderStatus),
+        select.value
+      );
+    });
   });
 
   bindReceiptButtons($("adminOrders"));
@@ -1060,17 +1752,26 @@ function renderAdminOrders() {
 function updateOrderStatus(id, newStatus) {
   if (currentRole !== "admin") return;
 
-  const order = orders.find(o => o.id === id);
+  const order = orders.find(
+    item => Number(item.id) === Number(id)
+  );
+
   if (!order) return;
 
-  const allowed = ["Pending", "Processing", "Completed", "Cancelled"];
+  const allowed = [
+    "Pending",
+    "Processing",
+    "Completed",
+    "Cancelled"
+  ];
 
   if (!allowed.includes(newStatus)) return;
 
   const oldStatus = order.status;
+
   if (oldStatus === newStatus) return;
 
-  // FIFO: only the first pending order can be processed or completed.
+  // FIFO: the oldest pending order must be handled first.
   if (
     ["Processing", "Completed"].includes(newStatus) &&
     oldStatus === "Pending" &&
@@ -1080,41 +1781,75 @@ function updateOrderStatus(id, newStatus) {
       `FIFO rule: process PV-${orderQueue.peek()} first.`,
       "error"
     );
+
     renderAdminOrders();
     return;
   }
 
-  const oldProducts = products.map(p => ({ ...p }));
+  const oldProducts = products.map(
+    product => ({ ...product })
+  );
+
   const oldQueue = orderQueue.toArray();
 
-  // Return stock when an order is cancelled.
-  if (newStatus === "Cancelled" && oldStatus !== "Cancelled") {
-    order.items.forEach(i => {
-      const p = products.find(x => x.id === i.productId);
-      if (p) p.stock += i.quantity;
+  // Restore stock when cancelling.
+  if (
+    newStatus === "Cancelled" &&
+    oldStatus !== "Cancelled"
+  ) {
+    order.items.forEach(item => {
+      const product = products.find(
+        p => Number(p.id) === Number(item.productId)
+      );
+
+      if (product) {
+        product.stock += item.quantity;
+      }
     });
   }
 
-  // Deduct stock again when a cancelled order is reactivated.
-  if (oldStatus === "Cancelled" && newStatus !== "Cancelled") {
-    const enough = order.items.every(i => {
-      const p = products.find(x => x.id === i.productId);
-      return p && p.stock >= i.quantity;
+  // Check stock before reactivating a cancelled order.
+  if (
+    oldStatus === "Cancelled" &&
+    newStatus !== "Cancelled"
+  ) {
+    const available = order.items.every(item => {
+      const product = products.find(
+        p => Number(p.id) === Number(item.productId)
+      );
+
+      return product &&
+        product.stock >= item.quantity;
     });
 
-    if (!enough) {
-      notify("Not enough stock to reactivate this order.", "error");
+    if (!available) {
+      notify(
+        "Not enough stock to reactivate this order.",
+        "error"
+      );
+
       renderAdminOrders();
       return;
     }
 
-    order.items.forEach(i => {
-      products.find(x => x.id === i.productId).stock -= i.quantity;
+    order.items.forEach(item => {
+      const product = products.find(
+        p => Number(p.id) === Number(item.productId)
+      );
+
+      product.stock -= item.quantity;
     });
   }
 
-  if (oldStatus === "Pending") orderQueue.remove(id);
-  if (newStatus === "Pending") orderQueue.enqueue(id);
+  // Remove an order from the queue when it leaves Pending.
+  if (oldStatus === "Pending") {
+    orderQueue.remove(id);
+  }
+
+  // Add an order to the queue if it becomes Pending again.
+  if (newStatus === "Pending") {
+    orderQueue.enqueue(id);
+  }
 
   order.status = newStatus;
 
@@ -1122,28 +1857,54 @@ function updateOrderStatus(id, newStatus) {
     order.status = oldStatus;
     products = oldProducts;
     orderQueue = new OrderQueue(oldQueue);
+
     return;
   }
 
   renderAdminOrders();
   renderDashboard();
   renderInventory();
+
   notify("Order status updated.");
 }
 
-/* RECEIPTS AND TRANSACTIONS */
+/* END OF PART 2 */
+/* =========================================================
+   12. RECEIPTS
+========================================================= */
+
+function bindReceiptButtons(container) {
+  if (!container) return;
+
+  container.querySelectorAll(
+    "[data-view-receipt]"
+  ).forEach(button => {
+    button.addEventListener("click", () => {
+      showReceipt(
+        Number(button.dataset.viewReceipt)
+      );
+    });
+  });
+}
 
 function showReceipt(id) {
-  const order = orders.find(o => o.id === id);
+  const order = orders.find(
+    item => Number(item.id) === Number(id)
+  );
+
   if (!order) return;
 
+  // Customers can only view their own receipts.
   if (
     currentRole !== "admin" &&
-    order.customerId !== currentUser.id
-  ) return;
+    (!currentUser || order.customerId !== currentUser.id)
+  ) {
+    return;
+  }
 
   $("receiptContent").innerHTML = `
     <div class="receipt">
+
       <div class="receipt-head">
         <h2>✿ Petal & Vine</h2>
         <p>FLOWER BOUTIQUE</p>
@@ -1152,15 +1913,40 @@ function showReceipt(id) {
 
       <hr>
 
-      <p><strong>Receipt No:</strong> PV-${order.id}</p>
-      <p><strong>Date:</strong> ${esc(dateText(order.date))}</p>
-      <p><strong>Customer:</strong> ${esc(order.customerName)}</p>
-      <p><strong>Phone:</strong> ${esc(order.phone)}</p>
-      <p><strong>Address:</strong> ${esc(order.address)}</p>
-      <p><strong>Payment:</strong> ${esc(order.payment)}</p>
+      <p>
+        <strong>Receipt No:</strong>
+        PV-${order.id}
+      </p>
+
+      <p>
+        <strong>Date:</strong>
+        ${escapeHTML(formatDate(order.date))}
+      </p>
+
+      <p>
+        <strong>Customer:</strong>
+        ${escapeHTML(order.customerName)}
+      </p>
+
+      <p>
+        <strong>Phone:</strong>
+        ${escapeHTML(order.phone)}
+      </p>
+
+      <p>
+        <strong>Address:</strong>
+        ${escapeHTML(order.address)}
+      </p>
+
+      <p>
+        <strong>Payment:</strong>
+        ${escapeHTML(order.payment)}
+      </p>
 
       <div class="table-wrap">
+
         <table>
+
           <thead>
             <tr>
               <th>Product</th>
@@ -1169,17 +1955,22 @@ function showReceipt(id) {
               <th>Subtotal</th>
             </tr>
           </thead>
+
           <tbody>
-            ${order.items.map(i => `
+
+            ${(order.items || []).map(item => `
               <tr>
-                <td>${esc(i.name)}</td>
-                <td>${i.quantity}</td>
-                <td>${money(i.price)}</td>
-                <td>${money(i.subtotal)}</td>
+                <td>${escapeHTML(item.name)}</td>
+                <td>${Number(item.quantity)}</td>
+                <td>${money(item.price)}</td>
+                <td>${money(item.subtotal)}</td>
               </tr>
             `).join("")}
+
           </tbody>
+
         </table>
+
       </div>
 
       <div class="summary-line summary-total">
@@ -1187,11 +1978,15 @@ function showReceipt(id) {
         <strong>${money(order.total)}</strong>
       </div>
 
-      <p><strong>Order Status:</strong> ${esc(order.status)}</p>
+      <p>
+        <strong>Order Status:</strong>
+        ${escapeHTML(order.status)}
+      </p>
 
       <div class="receipt-head">
         <p>We appreciate your purchase! 🌷</p>
       </div>
+
     </div>
   `;
 
@@ -1199,12 +1994,18 @@ function showReceipt(id) {
 }
 
 function renderCustomerReceipts() {
-  const list = orders.filter(o => o.customerId === currentUser.id);
+  if (!currentUser) return;
+
+  const list = orders.filter(
+    order => order.customerId === currentUser.id
+  );
 
   $("customerReceipts").innerHTML = list.length
     ? `
       <div class="table-wrap">
+
         <table>
+
           <thead>
             <tr>
               <th>Receipt Number</th>
@@ -1214,176 +2015,289 @@ function renderCustomerReceipts() {
               <th>Action</th>
             </tr>
           </thead>
+
           <tbody>
-            ${list.map(o => `
+
+            ${list.map(order => `
               <tr>
-                <td>PV-${o.id}</td>
-                <td>${esc(dateText(o.date))}</td>
-                <td>${money(o.total)}</td>
-                <td>${esc(o.status)}</td>
-                <td>${receiptButton(o.id, "View Receipt")}</td>
+
+                <td>PV-${order.id}</td>
+
+                <td>
+                  ${escapeHTML(formatDate(order.date))}
+                </td>
+
+                <td>
+                  ${money(order.total)}
+                </td>
+
+                <td>
+                  ${escapeHTML(order.status)}
+                </td>
+
+                <td>
+                  <button
+                    class="btn-soft"
+                    type="button"
+                    data-view-receipt="${order.id}"
+                  >
+                    View Receipt
+                  </button>
+                </td>
+
               </tr>
             `).join("")}
+
           </tbody>
+
         </table>
+
       </div>
     `
-    : '<div class="empty-state">No receipts available.</div>';
+    : `
+      <div class="empty-state">
+        No receipts available.
+      </div>
+    `;
 
   bindReceiptButtons($("customerReceipts"));
 }
 
-function renderTransactions() {
-  const list = orders.filter(o => o.customerId === currentUser.id);
+/* =========================================================
+   13. TRANSACTION HISTORY
+========================================================= */
 
-  const spent = list
-    .filter(o => o.status !== "Cancelled")
-    .reduce((sum, o) => sum + Number(o.total || 0), 0);
+function renderTransactions() {
+  if (!currentUser) return;
+
+  const list = orders.filter(
+    order => order.customerId === currentUser.id
+  );
+
+  const totalSpent = list
+    .filter(order => order.status !== "Cancelled")
+    .reduce(
+      (sum, order) => sum + Number(order.total || 0),
+      0
+    );
 
   $("customerTransactions").innerHTML = `
     <div class="stats-grid">
+
       <div class="stat-card">
         <span>Total Orders</span>
         <strong>${list.length}</strong>
       </div>
+
       <div class="stat-card">
         <span>Total Purchases (excluding cancelled)</span>
-        <strong>${money(spent)}</strong>
+        <strong>${money(totalSpent)}</strong>
       </div>
+
     </div>
 
-    ${list.length ? `
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Transaction</th>
-              <th>Date</th>
-              <th>Payment</th>
-              <th>Amount</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${list.map(o => `
-              <tr>
-                <td>PV-${o.id}</td>
-                <td>${esc(dateText(o.date))}</td>
-                <td>${esc(o.payment)}</td>
-                <td>${money(o.total)}</td>
-                <td>${esc(o.status)}</td>
-              </tr>
-            `).join("")}
-          </tbody>
-        </table>
-      </div>
-    ` : '<div class="empty-state">No transactions yet.</div>'}
+    ${
+      list.length
+        ? `
+          <div class="table-wrap">
+
+            <table>
+
+              <thead>
+                <tr>
+                  <th>Transaction</th>
+                  <th>Date</th>
+                  <th>Payment</th>
+                  <th>Amount</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+
+              <tbody>
+
+                ${list.map(order => `
+                  <tr>
+
+                    <td>PV-${order.id}</td>
+
+                    <td>
+                      ${escapeHTML(formatDate(order.date))}
+                    </td>
+
+                    <td>
+                      ${escapeHTML(order.payment)}
+                    </td>
+
+                    <td>
+                      ${money(order.total)}
+                    </td>
+
+                    <td>
+                      ${escapeHTML(order.status)}
+                    </td>
+
+                  </tr>
+                `).join("")}
+
+              </tbody>
+
+            </table>
+
+          </div>
+        `
+        : `
+          <div class="empty-state">
+            No transactions yet.
+          </div>
+        `
+    }
   `;
 }
 
-/* CUSTOMER PROFILE */
+/* =========================================================
+   14. CUSTOMER PROFILE
+========================================================= */
 
 function loadProfile() {
-  $("profileName").value = currentUser.fullName || "";
-  $("profileUsername").value = currentUser.username || "";
-  $("profilePhone").value = currentUser.phone || "";
-  $("profileAddress").value = currentUser.address || "";
+  if (!currentUser) return;
+
+  $("profileName").value =
+    currentUser.fullName || "";
+
+  $("profileUsername").value =
+    currentUser.username || "";
+
+  $("profilePhone").value =
+    currentUser.phone || "";
+
+  $("profileAddress").value =
+    currentUser.address || "";
+
   $("profilePassword").value = "";
 }
 
-$("profileForm").addEventListener("submit", event => {
-  event.preventDefault();
+if ($("profileForm")) {
+  $("profileForm").addEventListener("submit", event => {
+    event.preventDefault();
 
-  if (currentRole !== "customer") return;
+    if (currentRole !== "customer") return;
 
-  const name = $("profileName").value.trim();
-  const username = $("profileUsername").value.trim();
-  const phone = $("profilePhone").value.trim();
-  const address = $("profileAddress").value.trim();
-  const password = $("profilePassword").value;
+    const name = $("profileName").value.trim();
+    const username = $("profileUsername").value.trim();
+    const phone = $("profilePhone").value.trim();
+    const address = $("profileAddress").value.trim();
+    const password = $("profilePassword").value;
 
-  if (name.length < 2 || name.length > 100) {
-    return notify("Enter a valid full name.", "error");
-  }
+    if (name.length < 2 || name.length > 100) {
+      notify("Enter a valid full name.", "error");
+      return;
+    }
 
-  if (!/^[a-zA-Z0-9_.-]{3,30}$/.test(username)) {
-    return notify("Invalid username.", "error");
-  }
+    if (!/^[a-zA-Z0-9_.-]{3,30}$/.test(username)) {
+      notify("Invalid username.", "error");
+      return;
+    }
 
-  if (users.some(u =>
-    u.id !== currentUser.id &&
-    u.username.toLowerCase() === username.toLowerCase()
-  )) {
-    return notify("Username is already taken.", "error");
-  }
+    if (users.some(user =>
+      user.id !== currentUser.id &&
+      user.username.toLowerCase() === username.toLowerCase()
+    )) {
+      notify("Username is already taken.", "error");
+      return;
+    }
 
-  if (phone && !validPhone(phone)) {
-    return notify("Enter a valid phone number.", "error");
-  }
+    if (phone && !validPhone(phone)) {
+      notify("Enter a valid phone number.", "error");
+      return;
+    }
 
-  if (password && password.length < 6) {
-    return notify("Password must have at least 6 characters.", "error");
-  }
+    if (password && password.length < 6) {
+      notify(
+        "Password must have at least 6 characters.",
+        "error"
+      );
 
-  const old = { ...currentUser };
+      return;
+    }
 
-  Object.assign(currentUser, {
-    fullName: name,
-    username,
-    phone,
-    address
+    const oldUser = { ...currentUser };
+
+    currentUser.fullName = name;
+    currentUser.username = username;
+    currentUser.phone = phone;
+    currentUser.address = address;
+
+    if (password) {
+      currentUser.password = password;
+    }
+
+    if (!save(DB.users, users)) {
+      Object.assign(currentUser, oldUser);
+      return;
+    }
+
+    $("headerUser").textContent = name;
+    $("welcomeText").textContent = name;
+    $("profilePassword").value = "";
+
+    notify("Profile updated successfully.");
   });
+}
 
-  if (password) currentUser.password = password;
-
-  if (!save(DB.users, users)) {
-    Object.assign(currentUser, old);
-    return;
-  }
-
-  $("headerUser").textContent = name;
-  $("welcomeText").textContent = name;
-  $("profilePassword").value = "";
-
-  notify("Profile updated successfully.");
-});
-
-/* ADMIN PRODUCT MANAGEMENT */
+/* =========================================================
+   15. ADMIN PRODUCT MANAGEMENT
+========================================================= */
 
 function openProductModal(id = null) {
   if (currentRole !== "admin") return;
 
   $("productForm").reset();
+
   $("productId").value = "";
   $("productModalTitle").textContent = "Add Product";
+
   $("productImagePreview").classList.add("hidden");
+  $("productImagePreview").removeAttribute("src");
+
   selectedProduct = null;
 
   if (id !== null) {
-    const p = products.find(x => x.id === id);
-    if (!p) return;
+    const product = products.find(
+      item => Number(item.id) === Number(id)
+    );
 
-    selectedProduct = { ...p };
+    if (!product) return;
 
-    $("productId").value = p.id;
-    $("productName").value = p.name;
-    $("productCategory").value = p.category;
-    $("productDescription").value = p.description || "";
-    $("productPrice").value = p.price;
-    $("productStock").value = p.stock;
+    selectedProduct = { ...product };
 
-    if (/^https?:\/\//i.test(p.image || "")) {
-      $("productImage").value = p.image;
-      $("productImagePreview").src = p.image;
-      $("productImagePreview").classList.remove("hidden");
-    } else if (/^data:image\//i.test(p.image || "")) {
-      $("productImagePreview").src = p.image;
-      $("productImagePreview").classList.remove("hidden");
-    } else {
-      $("productImage").value = p.image || "";
+    $("productId").value = product.id;
+    $("productName").value = product.name;
+    $("productCategory").value = product.category;
+    $("productDescription").value =
+      product.description || "";
+
+    $("productPrice").value = product.price;
+    $("productStock").value = product.stock;
+
+    $("productImage").value =
+      isImageSource(product.image)
+        ? (
+            /^https?:\/\//i.test(product.image)
+              ? product.image
+              : ""
+          )
+        : "";
+
+    if (isImageSource(product.image)) {
+      $("productImagePreview").src = product.image;
+
+      $("productImagePreview").classList.remove(
+        "hidden"
+      );
     }
 
-    $("productModalTitle").textContent = "Edit Product";
+    $("productModalTitle").textContent =
+      "Edit Product";
   }
 
   $("productModal").classList.remove("hidden");
@@ -1391,221 +2305,355 @@ function openProductModal(id = null) {
 
 window.openProductModal = openProductModal;
 
-$("productImage").addEventListener("input", () => {
-  if (selectedProduct?.uploadedImage) {
-    delete selectedProduct.uploadedImage;
-  }
-});
+/* Clear uploaded image when the user enters a new image URL. */
 
-$("productImageFile").addEventListener("change", () => {
-  const file = $("productImageFile").files[0];
-  if (!file) return;
+if ($("productImage")) {
+  $("productImage").addEventListener("input", () => {
+    if (selectedProduct) {
+      delete selectedProduct.uploadedImage;
+    }
 
-  if (!file.type.startsWith("image/")) {
-    notify("Please select an image file.", "error");
-    $("productImageFile").value = "";
-    return;
-  }
+    const imageURL = $("productImage").value.trim();
 
-  if (file.size > 700000) {
-    notify("Please select an image smaller than 700 KB.", "error");
-    $("productImageFile").value = "";
-    return;
-  }
+    if (/^https?:\/\/\S+$/i.test(imageURL)) {
+      $("productImagePreview").src = imageURL;
 
-  const reader = new FileReader();
+      $("productImagePreview").classList.remove(
+        "hidden"
+      );
+    } else if (!imageURL) {
+      $("productImagePreview").classList.add("hidden");
+      $("productImagePreview").removeAttribute("src");
+    }
+  });
+}
 
-  reader.onload = () => {
-    selectedProduct = {
-      ...(selectedProduct || {}),
-      uploadedImage: reader.result
+/* Upload product image from the computer. */
+
+if ($("productImageFile")) {
+  $("productImageFile").addEventListener("change", () => {
+    const file = $("productImageFile").files[0];
+
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      notify("Please select an image file.", "error");
+
+      $("productImageFile").value = "";
+      return;
+    }
+
+    if (file.size > 700000) {
+      notify(
+        "Please select an image smaller than 700 KB.",
+        "error"
+      );
+
+      $("productImageFile").value = "";
+      return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      $("productImagePreview").src = reader.result;
+
+      $("productImagePreview").classList.remove(
+        "hidden"
+      );
+
+      selectedProduct = {
+        ...(selectedProduct || {}),
+        uploadedImage: reader.result
+      };
     };
 
-    $("productImagePreview").src = reader.result;
-    $("productImagePreview").classList.remove("hidden");
-  };
+    reader.onerror = () => {
+      notify("Unable to read the selected image.", "error");
+    };
 
-  reader.readAsDataURL(file);
-});
+    reader.readAsDataURL(file);
+  });
+}
 
-$("productForm").addEventListener("submit", event => {
-  event.preventDefault();
+/* Save product. */
 
-  if (currentRole !== "admin") return;
+if ($("productForm")) {
+  $("productForm").addEventListener("submit", event => {
+    event.preventDefault();
 
-  const id = Number($("productId").value);
-  const name = $("productName").value.trim();
-  const category = $("productCategory").value;
-  const description = $("productDescription").value.trim();
-  const price = Number($("productPrice").value);
-  const stock = Number($("productStock").value);
+    if (currentRole !== "admin") return;
 
-  let image = $("productImage").value.trim();
+    const id = Number($("productId").value);
+    const name = $("productName").value.trim();
+    const category = $("productCategory").value;
+    const description =
+      $("productDescription").value.trim();
 
-  if (selectedProduct?.uploadedImage) {
-    image = selectedProduct.uploadedImage;
-  }
+    const price = Number($("productPrice").value);
+    const stock = Number($("productStock").value);
 
-  if (!image) image = "🌸";
+    let image = $("productImage").value.trim();
 
-  if (name.length < 2 || name.length > 100) {
-    return notify("Enter a valid product name.", "error");
-  }
+    if (selectedProduct?.uploadedImage) {
+      image = selectedProduct.uploadedImage;
+    } else if (!image && id && selectedProduct) {
+      image = selectedProduct.image || "🌸";
+    }
 
-  if (!Number.isFinite(price) || price <= 0) {
-    return notify("Enter a valid product price.", "error");
-  }
+    if (!image) {
+      image = "🌸";
+    }
 
-  if (!Number.isInteger(stock) || stock < 0) {
-    return notify("Enter a valid stock quantity.", "error");
-  }
+    if (name.length < 2 || name.length > 100) {
+      notify("Enter a valid product name.", "error");
+      return;
+    }
 
-  if (products.some(p =>
-    p.id !== id && p.name.toLowerCase() === name.toLowerCase()
-  )) {
-    return notify("Product name already exists.", "error");
-  }
+    if (!category) {
+      notify("Please select a product category.", "error");
+      return;
+    }
 
-  if (
-    /^https?:\/\//i.test(image) &&
-    !/^https?:\/\/\S+$/i.test(image)
-  ) {
-    return notify("Invalid image URL.", "error");
-  }
+    if (!Number.isFinite(price) || price <= 0) {
+      notify("Enter a valid product price.", "error");
+      return;
+    }
 
-  const before = products.map(p => ({ ...p }));
+    if (!Number.isInteger(stock) || stock < 0) {
+      notify("Enter a valid stock quantity.", "error");
+      return;
+    }
 
-  if (id) {
-    const p = products.find(x => x.id === id);
-    if (!p) return;
+    if (products.some(product =>
+      Number(product.id) !== id &&
+      product.name.toLowerCase() === name.toLowerCase()
+    )) {
+      notify("Product name already exists.", "error");
+      return;
+    }
 
-    Object.assign(p, {
-      name,
-      category,
-      description,
-      price,
-      stock,
-      image
-    });
-  } else {
-    products.push({
-      id: nextProductId++,
-      name,
-      category,
-      description,
-      price,
-      stock,
-      image
-    });
-  }
+    if (
+      /^https?:\/\//i.test(image) &&
+      !/^https?:\/\/\S+$/i.test(image)
+    ) {
+      notify("Invalid image URL.", "error");
+      return;
+    }
 
-  if (!saveAll()) {
-    products = before;
-    return;
-  }
+    if (
+      !isImageSource(image) &&
+      image.length > 20
+    ) {
+      notify(
+        "Use a valid image URL or a short flower symbol.",
+        "error"
+      );
 
-  selectedProduct = null;
-  closeModal("productModal");
-  $("productImageFile").value = "";
+      return;
+    }
 
-  renderAdminProducts();
-  renderInventory();
-  renderDashboard();
+    const previous = products.map(
+      product => ({ ...product })
+    );
 
-  notify(id
-    ? "Product updated successfully."
-    : "Product added successfully."
-  );
-});
+    if (id) {
+      const product = products.find(
+        item => Number(item.id) === id
+      );
+
+      if (!product) return;
+
+      Object.assign(product, {
+        name,
+        category,
+        description,
+        price,
+        stock,
+        image
+      });
+
+    } else {
+      products.push({
+        id: nextProductId++,
+        name,
+        category,
+        description,
+        price,
+        stock,
+        image
+      });
+    }
+
+    if (!saveAll()) {
+      products = previous;
+      return;
+    }
+
+    selectedProduct = null;
+
+    closeModal("productModal");
+
+    renderAdminProducts();
+    renderInventory();
+    renderDashboard();
+
+    notify(
+      id
+        ? "Product updated successfully."
+        : "Product added successfully."
+    );
+  });
+}
+
+/* Display products in admin panel. */
 
 function renderAdminProducts() {
   if (currentRole !== "admin") return;
 
-  const query = $("adminProductSearch").value.toLowerCase().trim();
+  const searchInput = $("adminProductSearch");
 
-  const list = products.filter(p =>
-    p.name.toLowerCase().includes(query) ||
-    p.category.toLowerCase().includes(query)
+  const query = searchInput
+    ? searchInput.value.toLowerCase().trim()
+    : "";
+
+  const list = products.filter(product =>
+    String(product.name || "").toLowerCase().includes(query) ||
+    String(product.category || "").toLowerCase().includes(query)
   );
 
   $("adminProducts").innerHTML = list.length
-    ? list.map(p => `
-      <div class="admin-item">
-        <div class="admin-item-main">
-          <div class="cart-thumb">
-            ${
-              /^https?:\/\//i.test(p.image || "") ||
-              /^data:image\//i.test(p.image || "")
-                ? `<img src="${esc(p.image)}" alt="">`
-                : esc(p.image || "🌸")
-            }
+    ? list.map(product => `
+        <div class="admin-item">
+
+          <div class="admin-item-main">
+
+            <div class="cart-thumb">
+
+              ${
+                isImageSource(product.image)
+                  ? `
+                    <img
+                      src="${escapeHTML(product.image)}"
+                      alt="${escapeHTML(product.name)}"
+                    >
+                  `
+                  : escapeHTML(product.image || "🌸")
+              }
+
+            </div>
+
+            <div class="cart-detail">
+
+              <strong>
+                ${escapeHTML(product.name)}
+              </strong>
+
+              <small>
+                ${escapeHTML(product.category)}
+                · ${money(product.price)}
+              </small>
+
+              <small>
+                Stock: ${product.stock}
+              </small>
+
+            </div>
+
           </div>
 
-          <div class="cart-detail">
-            <strong>${esc(p.name)}</strong>
-            <small>${esc(p.category)} · ${money(p.price)}</small>
-            <small>Stock: ${p.stock}</small>
-          </div>
-        </div>
+          <div class="admin-actions">
 
-        <div class="admin-actions">
-          <button class="btn-soft" data-edit-product="${p.id}">
-            Edit
-          </button>
-          <button class="btn-danger" data-delete-product="${p.id}">
-            Delete
-          </button>
+            <button
+              class="btn-soft"
+              type="button"
+              data-edit-product="${product.id}"
+            >
+              Edit
+            </button>
+
+            <button
+              class="btn-danger"
+              type="button"
+              data-delete-product="${product.id}"
+            >
+              Delete
+            </button>
+
+          </div>
+
         </div>
+      `).join("")
+    : `
+      <div class="empty-state">
+        No products found.
       </div>
-    `).join("")
-    : '<div class="empty-state">No products found.</div>';
+    `;
 
-  $("adminProducts").querySelectorAll("[data-edit-product]")
-    .forEach(button => {
-      button.addEventListener("click", () =>
-        openProductModal(Number(button.dataset.editProduct))
+  $("adminProducts").querySelectorAll(
+    "[data-edit-product]"
+  ).forEach(button => {
+    button.addEventListener("click", () => {
+      openProductModal(
+        Number(button.dataset.editProduct)
       );
     });
+  });
 
-  $("adminProducts").querySelectorAll("[data-delete-product]")
-    .forEach(button => {
-      button.addEventListener("click", () =>
-        deleteProduct(Number(button.dataset.deleteProduct))
+  $("adminProducts").querySelectorAll(
+    "[data-delete-product]"
+  ).forEach(button => {
+    button.addEventListener("click", () => {
+      deleteProduct(
+        Number(button.dataset.deleteProduct)
       );
     });
+  });
 }
 
-$("adminProductSearch").addEventListener("input", renderAdminProducts);
+if ($("adminProductSearch")) {
+  $("adminProductSearch").addEventListener(
+    "input",
+    renderAdminProducts
+  );
+}
+
+/* Delete product and remove it from all carts. */
 
 function deleteProduct(id) {
   if (currentRole !== "admin") return;
 
-  const p = products.find(x => x.id === id);
+  const product = products.find(
+    item => Number(item.id) === Number(id)
+  );
 
-  if (!p || !confirm(`Delete ${p.name}?`)) return;
+  if (!product) return;
 
-  if (orders.some(o =>
-    o.status !== "Cancelled" &&
-    o.items.some(i => i.productId === id)
-  )) {
-    return notify(
-      "This product is part of an active or completed order and cannot be deleted.",
-      "error"
-    );
+  if (!confirm(`Delete ${product.name}?`)) {
+    return;
   }
 
-  const oldProducts = products.map(x => ({ ...x }));
-  const oldCarts = JSON.parse(JSON.stringify(carts));
+  const previousProducts = products.map(
+    item => ({ ...item })
+  );
 
-  products = products.filter(x => x.id !== id);
+  const previousCarts = JSON.parse(
+    JSON.stringify(carts)
+  );
 
-  Object.keys(carts).forEach(uid => {
-    carts[uid] = (carts[uid] || []).filter(i => i.productId !== id);
+  products = products.filter(
+    item => Number(item.id) !== Number(id)
+  );
+
+  Object.keys(carts).forEach(userId => {
+    carts[userId] = carts[userId].filter(
+      item => Number(item.productId) !== Number(id)
+    );
   });
 
   if (!saveAll()) {
-    products = oldProducts;
-    carts = oldCarts;
+    products = previousProducts;
+    carts = previousCarts;
     return;
   }
 
@@ -1616,13 +2664,26 @@ function deleteProduct(id) {
   notify("Product deleted.");
 }
 
-/* INVENTORY */
+/* END OF PART 3 */
+/* =========================================================
+   16. INVENTORY MANAGEMENT
+========================================================= */
 
 function renderInventory() {
   if (currentRole !== "admin") return;
 
+  const totalStock = products.reduce(
+    (sum, product) => sum + Number(product.stock || 0),
+    0
+  );
+
+  const lowStock = products.filter(
+    product => Number(product.stock) <= 5
+  ).length;
+
   $("inventoryList").innerHTML = `
     <div class="stats-grid">
+
       <div class="stat-card">
         <span>Total Products</span>
         <strong>${products.length}</strong>
@@ -1630,17 +2691,20 @@ function renderInventory() {
 
       <div class="stat-card">
         <span>Total Stock</span>
-        <strong>${products.reduce((sum, p) => sum + p.stock, 0)}</strong>
+        <strong>${totalStock}</strong>
       </div>
 
       <div class="stat-card">
         <span>Low Stock (5 or less)</span>
-        <strong>${products.filter(p => p.stock <= 5).length}</strong>
+        <strong>${lowStock}</strong>
       </div>
+
     </div>
 
     <div class="table-wrap">
+
       <table>
+
         <thead>
           <tr>
             <th>Product</th>
@@ -1653,212 +2717,287 @@ function renderInventory() {
         </thead>
 
         <tbody>
-          ${products.map(p => `
+
+          ${products.map(product => `
             <tr>
-              <td>${esc(p.name)}</td>
-              <td>${esc(p.category)}</td>
-              <td>${money(p.price)}</td>
-              <td>${p.stock}</td>
+
+              <td>${escapeHTML(product.name)}</td>
+
+              <td>${escapeHTML(product.category)}</td>
+
+              <td>${money(product.price)}</td>
+
+              <td>${Number(product.stock)}</td>
+
               <td>
+
                 <span class="status ${
-                  p.stock === 0
+                  product.stock === 0
                     ? "cancelled"
-                    : p.stock <= 5
+                    : product.stock <= 5
                       ? ""
                       : "delivered"
                 }">
+
                   ${
-                    p.stock === 0
+                    product.stock === 0
                       ? "Out of Stock"
-                      : p.stock <= 5
+                      : product.stock <= 5
                         ? "Low Stock"
                         : "In Stock"
                   }
+
                 </span>
+
               </td>
+
               <td>
-                <button class="btn-soft" data-inventory-edit="${p.id}">
+
+                <button
+                  class="btn-soft"
+                  type="button"
+                  data-inventory-edit="${product.id}"
+                >
                   Update
                 </button>
+
               </td>
+
             </tr>
           `).join("")}
+
         </tbody>
+
       </table>
+
     </div>
   `;
 
-  $("inventoryList").querySelectorAll("[data-inventory-edit]")
-    .forEach(button => {
-      button.addEventListener("click", () =>
-        openProductModal(Number(button.dataset.inventoryEdit))
+  $("inventoryList").querySelectorAll(
+    "[data-inventory-edit]"
+  ).forEach(button => {
+    button.addEventListener("click", () => {
+      openProductModal(
+        Number(button.dataset.inventoryEdit)
       );
     });
+  });
 }
 
-/* CUSTOMER ACCOUNT MANAGEMENT */
+/* =========================================================
+   17. CUSTOMER ACCOUNT MANAGEMENT
+========================================================= */
 
 function renderAdminUsers() {
   if (currentRole !== "admin") return;
 
-  const customers = users.filter(u => u.role === "customer");
-  const cutoff = Date.now() - (30 * 24 * 60 * 60 * 1000);
+  const customers = users.filter(
+    user => user.role === "customer"
+  );
 
-  const isWithinLast30Days = value => {
-    const time = Date.parse(value || "");
-    return Number.isFinite(time) && time >= cutoff;
-  };
+  $("adminUsers").innerHTML = customers.length
+    ? `
+      <div class="table-wrap">
 
-  const newUsers = customers.filter(u =>
-    isWithinLast30Days(u.createdAt)
-  ).length;
+        <table>
 
-  const activeUsers = customers.filter(u =>
-    u.active !== false && isWithinLast30Days(u.lastLogin)
-  ).length;
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Username</th>
+              <th>Phone</th>
+              <th>Joined</th>
+              <th>Account Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
 
-  $("adminUsers").innerHTML = `
-    <div class="stats-grid">
-      <div class="stat-card">
-        <span>Total Users</span>
-        <strong>${customers.length}</strong>
+          <tbody>
+
+            ${customers.map(user => `
+              <tr>
+
+                <td>
+                  ${escapeHTML(user.fullName)}
+                </td>
+
+                <td>
+                  ${escapeHTML(user.username)}
+                </td>
+
+                <td>
+                  ${escapeHTML(user.phone || "—")}
+                </td>
+
+                <td>
+                  ${escapeHTML(formatDate(user.createdAt))}
+                </td>
+
+                <td>
+                  ${user.active === false ? "Disabled" : "Active"}
+                </td>
+
+                <td>
+
+                  <button
+                    class="btn-soft"
+                    type="button"
+                    data-toggle-user="${user.id}"
+                  >
+                    ${user.active === false ? "Enable" : "Disable"}
+                  </button>
+
+                  <button
+                    class="btn-danger"
+                    type="button"
+                    data-delete-user="${user.id}"
+                  >
+                    Delete
+                  </button>
+
+                </td>
+
+              </tr>
+            `).join("")}
+
+          </tbody>
+
+        </table>
+
       </div>
-
-      <div class="stat-card">
-        <span>New Users (Last 30 Days)</span>
-        <strong>${newUsers}</strong>
+    `
+    : `
+      <div class="empty-state">
+        No customer accounts found.
       </div>
+    `;
 
-      <div class="stat-card">
-        <span>Active Users (Logged In, Last 30 Days)</span>
-        <strong>${activeUsers}</strong>
-      </div>
-    </div>
-
-    ${
-      customers.length
-        ? `
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Username</th>
-                  <th>Phone</th>
-                  <th>Joined</th>
-                  <th>Last Login</th>
-                  <th>Account Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                ${customers.map(u => `
-                  <tr>
-                    <td>${esc(u.fullName)}</td>
-                    <td>${esc(u.username)}</td>
-                    <td>${esc(u.phone || "—")}</td>
-                    <td>${esc(dateText(u.createdAt))}</td>
-                    <td>${u.lastLogin ? esc(dateText(u.lastLogin)) : "Never"}</td>
-                    <td>${u.active === false ? "Disabled" : "Active"}</td>
-                    <td>
-                      <button class="btn-soft" data-toggle-user="${u.id}">
-                        ${u.active === false ? "Enable" : "Disable"}
-                      </button>
-
-                      <button class="btn-danger" data-delete-user="${u.id}">
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                `).join("")}
-              </tbody>
-            </table>
-          </div>
-        `
-        : '<div class="empty-state">No customer accounts found.</div>'
-    }
-  `;
-
-  $("adminUsers").querySelectorAll("[data-toggle-user]")
-    .forEach(button => {
-      button.addEventListener("click", () =>
-        toggleUser(Number(button.dataset.toggleUser))
+  $("adminUsers").querySelectorAll(
+    "[data-toggle-user]"
+  ).forEach(button => {
+    button.addEventListener("click", () => {
+      toggleUser(
+        Number(button.dataset.toggleUser)
       );
     });
+  });
 
-  $("adminUsers").querySelectorAll("[data-delete-user]")
-    .forEach(button => {
-      button.addEventListener("click", () =>
-        deleteUser(Number(button.dataset.deleteUser))
+  $("adminUsers").querySelectorAll(
+    "[data-delete-user]"
+  ).forEach(button => {
+    button.addEventListener("click", () => {
+      deleteUser(
+        Number(button.dataset.deleteUser)
       );
     });
+  });
 }
 
 function toggleUser(id) {
   if (currentRole !== "admin") return;
 
-  const u = users.find(x => x.id === id && x.role === "customer");
-  if (!u) return;
+  const user = users.find(item =>
+    Number(item.id) === Number(id) &&
+    item.role === "customer"
+  );
 
-  const old = u.active;
-  u.active = old === false;
+  if (!user) return;
+
+  const oldStatus = user.active;
+
+  user.active = user.active === false;
 
   if (!save(DB.users, users)) {
-    u.active = old;
+    user.active = oldStatus;
     return;
   }
 
   renderAdminUsers();
-  notify(u.active ? "Account enabled." : "Account disabled.");
+
+  notify(
+    user.active
+      ? "Account enabled."
+      : "Account disabled."
+  );
 }
 
 function deleteUser(id) {
   if (currentRole !== "admin") return;
 
-  const u = users.find(x => x.id === id && x.role === "customer");
-  if (!u) return;
+  const user = users.find(item =>
+    Number(item.id) === Number(id) &&
+    item.role === "customer"
+  );
 
-  if (orders.some(o =>
-    o.customerId === id && o.status !== "Cancelled"
-  )) {
-    return notify(
+  if (!user) return;
+
+  const hasOrders = orders.some(order =>
+    order.customerId === id &&
+    order.status !== "Cancelled"
+  );
+
+  if (hasOrders) {
+    notify(
       "Cannot delete a customer with active or completed orders.",
       "error"
     );
+
+    return;
   }
 
-  if (!confirm(`Delete ${u.fullName}'s account?`)) return;
+  if (!confirm(`Delete ${user.fullName}'s account?`)) {
+    return;
+  }
 
-  const oldUsers = users;
-  const oldCarts = JSON.parse(JSON.stringify(carts));
+  const previousUsers = [...users];
 
-  users = users.filter(x => x.id !== id);
+  const previousCarts = JSON.parse(
+    JSON.stringify(carts)
+  );
+
+  users = users.filter(
+    item => Number(item.id) !== Number(id)
+  );
+
   delete carts[id];
 
   if (!saveAll()) {
-    users = oldUsers;
-    carts = oldCarts;
+    users = previousUsers;
+    carts = previousCarts;
     return;
   }
 
   renderAdminUsers();
   renderDashboard();
+
   notify("Customer account deleted.");
 }
 
-/* DASHBOARD AND ADMIN SETTINGS */
+/* =========================================================
+   18. ADMIN DASHBOARD AND REPORTS
+========================================================= */
 
 function renderDashboard() {
   if (currentRole !== "admin") return;
 
   const revenue = orders
-    .filter(o => o.status === "Completed")
-    .reduce((sum, o) => sum + Number(o.total || 0), 0);
+    .filter(order => order.status === "Completed")
+    .reduce(
+      (sum, order) => sum + Number(order.total || 0),
+      0
+    );
 
-  const pending = orders.filter(o => o.status === "Pending").length;
-  const completed = orders.filter(o => o.status === "Completed").length;
-  const customers = users.filter(u => u.role === "customer").length;
+  const pending = orders.filter(
+    order => order.status === "Pending"
+  ).length;
+
+  const completed = orders.filter(
+    order => order.status === "Completed"
+  ).length;
+
+  const customers = users.filter(
+    user => user.role === "customer"
+  ).length;
 
   $("dashboardStats").innerHTML = `
     <div class="stat-card">
@@ -1897,7 +3036,9 @@ function renderDashboard() {
   $("recentOrders").innerHTML = recent.length
     ? `
       <div class="table-wrap">
+
         <table>
+
           <thead>
             <tr>
               <th>Order ID</th>
@@ -1909,165 +3050,239 @@ function renderDashboard() {
           </thead>
 
           <tbody>
-            ${recent.map(o => `
+
+            ${recent.map(order => `
               <tr>
-                <td>PV-${o.id}</td>
-                <td>${esc(o.customerName)}</td>
-                <td>${esc(dateText(o.date))}</td>
-                <td>${money(o.total)}</td>
-                <td>${esc(o.status)}</td>
+
+                <td>PV-${order.id}</td>
+
+                <td>
+                  ${escapeHTML(order.customerName)}
+                </td>
+
+                <td>
+                  ${escapeHTML(formatDate(order.date))}
+                </td>
+
+                <td>
+                  ${money(order.total)}
+                </td>
+
+                <td>
+                  ${escapeHTML(order.status)}
+                </td>
+
               </tr>
             `).join("")}
+
           </tbody>
+
         </table>
+
       </div>
     `
-    : '<div class="empty-state">No recent orders.</div>';
+    : `
+      <div class="empty-state">
+        No recent orders.
+      </div>
+    `;
 }
 
+/* =========================================================
+   19. ADMIN ACCOUNT SETTINGS
+========================================================= */
+
 function loadSettings() {
-  $("settingsUsername").value = currentUser.username;
+  if (currentRole !== "admin") return;
+
+  $("settingsUsername").value =
+    currentUser.username;
+
   $("settingsPassword").value = "";
   $("settingsConfirm").value = "";
   $("settingsMessage").textContent = "";
 }
 
-$("settingsForm").addEventListener("submit", event => {
-  event.preventDefault();
+if ($("settingsForm")) {
+  $("settingsForm").addEventListener("submit", event => {
+    event.preventDefault();
 
-  if (currentRole !== "admin") return;
+    if (currentRole !== "admin") return;
 
-  const username = $("settingsUsername").value.trim();
-  const password = $("settingsPassword").value;
-  const confirmPassword = $("settingsConfirm").value;
+    const username =
+      $("settingsUsername").value.trim();
 
-  if (!/^[a-zA-Z0-9_.-]{3,30}$/.test(username)) {
-    return $("settingsMessage").textContent = "Invalid username.";
-  }
+    const password =
+      $("settingsPassword").value;
 
-  if (users.some(u =>
-    u.id !== currentUser.id &&
-    u.username.toLowerCase() === username.toLowerCase()
-  )) {
-    return $("settingsMessage").textContent = "Username is already in use.";
-  }
+    const confirmPassword =
+      $("settingsConfirm").value;
 
-  if (
-    (password || confirmPassword) &&
-    (password.length < 6 || password !== confirmPassword)
-  ) {
-    return $("settingsMessage").textContent =
-      password.length < 6
-        ? "Password must contain at least 6 characters."
-        : "Passwords do not match.";
-  }
+    if (!/^[a-zA-Z0-9_.-]{3,30}$/.test(username)) {
+      $("settingsMessage").textContent =
+        "Invalid username.";
 
-  const old = {
-    username: currentUser.username,
-    password: currentUser.password
-  };
+      return;
+    }
 
-  currentUser.username = username;
+    if (users.some(user =>
+      user.id !== currentUser.id &&
+      user.username.toLowerCase() === username.toLowerCase()
+    )) {
+      $("settingsMessage").textContent =
+        "Username is already in use.";
 
-  if (password) currentUser.password = password;
+      return;
+    }
 
-  if (!save(DB.users, users)) {
-    Object.assign(currentUser, old);
-    return;
-  }
+    if (password || confirmPassword) {
+      if (password.length < 6) {
+        $("settingsMessage").textContent =
+          "Password must contain at least 6 characters.";
 
-  $("settingsPassword").value = "";
-  $("settingsConfirm").value = "";
-  $("settingsMessage").textContent =
-    "Administrator settings saved successfully.";
+        return;
+      }
 
-  notify("Admin settings updated.");
-});
+      if (password !== confirmPassword) {
+        $("settingsMessage").textContent =
+          "Passwords do not match.";
 
-/* PRINT RECEIPT */
+        return;
+      }
+    }
+
+    const oldUsername = currentUser.username;
+    const oldPassword = currentUser.password;
+
+    currentUser.username = username;
+
+    if (password) {
+      currentUser.password = password;
+    }
+
+    if (!save(DB.users, users)) {
+      currentUser.username = oldUsername;
+      currentUser.password = oldPassword;
+      return;
+    }
+
+    $("settingsPassword").value = "";
+    $("settingsConfirm").value = "";
+
+    $("settingsMessage").textContent =
+      "Administrator settings saved successfully.";
+
+    notify("Admin settings updated.");
+  });
+}
+
+/* =========================================================
+   20. PRINT RECEIPT
+========================================================= */
 
 function printReceipt() {
   const content = $("receiptContent");
 
-  if (!content.innerHTML.trim()) return;
-
-  const win = window.open("", "_blank", "width=850,height=750");
-
-  if (!win) {
-    return notify("Allow pop-ups to print your receipt.", "error");
+  if (!content || !content.innerHTML.trim()) {
+    notify("No receipt is available to print.", "error");
+    return;
   }
 
-  win.document.write(`
+  const printWindow = window.open(
+    "",
+    "_blank",
+    "width=850,height=750"
+  );
+
+  if (!printWindow) {
+    notify(
+      "Allow pop-ups to print your receipt.",
+      "error"
+    );
+
+    return;
+  }
+
+  printWindow.document.write(`
     <!DOCTYPE html>
-    <html>
-      <head>
-        <meta charset="UTF-8">
-        <title>Petal & Vine Receipt</title>
+    <html lang="en">
 
-        <style>
+    <head>
+      <meta charset="UTF-8">
+
+      <title>Petal & Vine Receipt</title>
+
+      <style>
+
+        body {
+          padding: 25px;
+          color: #382b32;
+          font-family: Arial, sans-serif;
+        }
+
+        h2 {
+          color: #5d2c43;
+        }
+
+        table {
+          width: 100%;
+          border-collapse: collapse;
+        }
+
+        th,
+        td {
+          padding: 10px;
+          border-bottom: 1px solid #eee;
+          text-align: left;
+        }
+
+        .receipt-head {
+          text-align: center;
+        }
+
+        .summary-line {
+          display: flex;
+          justify-content: space-between;
+          margin-top: 15px;
+        }
+
+        .summary-total {
+          font-size: 20px;
+          font-weight: bold;
+        }
+
+        @media print {
           body {
-            padding: 25px;
-            color: #382b32;
-            font-family: Arial, sans-serif;
+            padding: 0;
           }
+        }
 
-          h2 {
-            color: #5d2c43;
-          }
+      </style>
+    </head>
 
-          table {
-            width: 100%;
-            border-collapse: collapse;
-          }
+    <body>
 
-          th, td {
-            padding: 10px;
-            border-bottom: 1px solid #eee;
-            text-align: left;
-          }
+      ${content.innerHTML}
 
-          .receipt-head {
-            text-align: center;
-          }
+      <script>
+        window.onload = function() {
+          window.print();
+        };
+      <\/script>
 
-          .summary-line {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 15px;
-          }
+    </body>
 
-          .summary-total {
-            font-size: 20px;
-            font-weight: bold;
-          }
-
-          @media print {
-            body {
-              padding: 0;
-            }
-          }
-        </style>
-      </head>
-
-      <body>
-        ${content.innerHTML}
-
-        <script>
-          window.onload = function() {
-            window.print();
-          };
-        <\/script>
-      </body>
     </html>
   `);
 
-  win.document.close();
+  printWindow.document.close();
 }
 
-// The HTML button calls printReceipt() directly.
-// Do not attach a second click handler.
+window.printReceipt = printReceipt;
 
-/* MODAL CLOSE BEHAVIOR */
+/* =========================================================
+   21. MODAL BEHAVIOR
+========================================================= */
 
 document.querySelectorAll(".modal").forEach(modal => {
   modal.addEventListener("click", event => {
@@ -2085,11 +3300,18 @@ document.addEventListener("keydown", event => {
   }
 });
 
-/* START APPLICATION */
+/* =========================================================
+   22. INITIALIZATION
+========================================================= */
 
 function initializeApplication() {
   initializeData();
   restoreSession();
 }
 
-document.addEventListener("DOMContentLoaded", initializeApplication);
+document.addEventListener(
+  "DOMContentLoaded",
+  initializeApplication
+);
+
+/* END OF PETAL & VINE JAVASCRIPT */
