@@ -1,3 +1,4 @@
+
 "use strict";
 
 /* =========================================================
@@ -32,11 +33,15 @@ let currentUser = null;
 let currentRole = null;
 let currentPage = "";
 let toastTimer = null;
-let selectedProduct = new Set();
+
+/* Currently edited product */
+let selectedProduct = null;
+
+/* Products selected for checkout */
+let selectedCartProducts = new Set();
 
 let nextProductId = 1;
 let nextOrderId = 1;
-
 let orderQueue;
 
 /* =========================================================
@@ -72,7 +77,6 @@ function formatDate(date) {
 
 function notify(message, type = "success") {
   const toast = $("toast");
-
   if (!toast) return;
 
   clearTimeout(toastTimer);
@@ -104,11 +108,7 @@ function validPhone(phone) {
 function read(key, fallback) {
   try {
     const value = localStorage.getItem(key);
-
-    return value === null
-      ? fallback
-      : JSON.parse(value);
-
+    return value === null ? fallback : JSON.parse(value);
   } catch (error) {
     console.error("Storage read error:", error);
     return fallback;
@@ -119,15 +119,9 @@ function save(key, value) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
     return true;
-
   } catch (error) {
     console.error("Storage save error:", error);
-
-    notify(
-      "Unable to save. Browser storage may be full.",
-      "error"
-    );
-
+    notify("Unable to save. Browser storage may be full.", "error");
     return false;
   }
 }
@@ -138,11 +132,7 @@ function saveAll() {
     localStorage.setItem(DB.products, JSON.stringify(products));
     localStorage.setItem(DB.orders, JSON.stringify(orders));
     localStorage.setItem(DB.carts, JSON.stringify(carts));
-
-    localStorage.setItem(
-      DB.queue,
-      JSON.stringify(orderQueue.toArray())
-    );
+    localStorage.setItem(DB.queue, JSON.stringify(orderQueue.toArray()));
 
     localStorage.setItem(DB.counters, JSON.stringify({
       product: nextProductId,
@@ -150,15 +140,9 @@ function saveAll() {
     }));
 
     return true;
-
   } catch (error) {
     console.error("Save error:", error);
-
-    notify(
-      "Unable to save application data.",
-      "error"
-    );
-
+    notify("Unable to save application data.", "error");
     return false;
   }
 }
@@ -177,7 +161,6 @@ function setCart(cart) {
   if (!currentUser) return false;
 
   const oldCart = carts[currentUser.id] || [];
-
   carts[currentUser.id] = cart;
 
   if (!save(DB.carts, carts)) {
@@ -186,7 +169,6 @@ function setCart(cart) {
   }
 
   updateCartCount();
-
   return true;
 }
 
@@ -196,9 +178,7 @@ function setCart(cart) {
 
 class OrderQueue {
   constructor(items = []) {
-    this.items = Array.isArray(items)
-      ? [...items]
-      : [];
+    this.items = Array.isArray(items) ? [...items] : [];
   }
 
   enqueue(id) {
@@ -216,9 +196,7 @@ class OrderQueue {
   }
 
   remove(id) {
-    this.items = this.items.filter(
-      item => item !== id
-    );
+    this.items = this.items.filter(item => item !== id);
   }
 
   toArray() {
@@ -292,10 +270,7 @@ function initializeData() {
   products = read(DB.products, []);
   orders = read(DB.orders, []);
   carts = read(DB.carts, {});
-
-  orderQueue = new OrderQueue(
-    read(DB.queue, [])
-  );
+  orderQueue = new OrderQueue(read(DB.queue, []));
 
   const counters = read(DB.counters, {});
 
@@ -303,11 +278,7 @@ function initializeData() {
   if (!Array.isArray(products)) products = [];
   if (!Array.isArray(orders)) orders = [];
 
-  if (
-    !carts ||
-    typeof carts !== "object" ||
-    Array.isArray(carts)
-  ) {
+  if (!carts || typeof carts !== "object" || Array.isArray(carts)) {
     carts = {};
   }
 
@@ -326,40 +297,48 @@ function initializeData() {
 
   orders = orders.map(order => ({
     ...order,
-    items: Array.isArray(order.items)
-      ? order.items
-      : [],
+    items: Array.isArray(order.items) ? order.items : [],
     status: order.status || "Pending"
   }));
 
+  /* Remove invalid cart entries and repair quantities. */
+  Object.keys(carts).forEach(userId => {
+    if (!Array.isArray(carts[userId])) {
+      carts[userId] = [];
+      return;
+    }
+
+    carts[userId] = carts[userId].filter(item => {
+      const product = products.find(
+        p => Number(p.id) === Number(item.productId)
+      );
+
+      return product &&
+        Number.isInteger(Number(item.quantity)) &&
+        Number(item.quantity) > 0;
+    }).map(item => ({
+      productId: Number(item.productId),
+      quantity: Number(item.quantity)
+    }));
+  });
+
   nextProductId = Math.max(
     Number(counters.product) || 1,
-    ...products.map(product =>
-      (Number(product.id) || 0) + 1
-    ),
+    ...products.map(product => (Number(product.id) || 0) + 1),
     1
   );
 
   nextOrderId = Math.max(
     Number(counters.order) || 1,
-    ...orders.map(order =>
-      (Number(order.id) || 0) + 1
-    ),
+    ...orders.map(order => (Number(order.id) || 0) + 1),
     1
   );
 
-  const hasAdmin = users.some(
-    user => user.role === "admin"
-  );
+  const hasAdmin = users.some(user => user.role === "admin");
 
   if (!hasAdmin) {
-    const adminId = Math.max(
-      0,
-      ...users.map(user => Number(user.id) || 0)
-    ) + 1;
-
     users.push({
-      id: adminId,
+      id: Math.max(0, ...users.map(user => Number(user.id) || 0)) + 1,
       fullName: "Petal & Vine Administrator",
       username: "admin",
       password: "Admin123",
@@ -371,7 +350,6 @@ function initializeData() {
     });
   }
 
-  // Keep only pending orders in the FIFO queue.
   const pendingIds = orders
     .filter(order => order.status === "Pending")
     .map(order => order.id);
@@ -379,12 +357,8 @@ function initializeData() {
   const savedQueue = orderQueue.toArray();
 
   orderQueue = new OrderQueue([
-    ...savedQueue.filter(id =>
-      pendingIds.includes(id)
-    ),
-    ...pendingIds.filter(id =>
-      !savedQueue.includes(id)
-    )
+    ...savedQueue.filter(id => pendingIds.includes(id)),
+    ...pendingIds.filter(id => !savedQueue.includes(id))
   ]);
 
   saveAll();
@@ -400,7 +374,7 @@ function showLogin() {
   $("loginForm").classList.remove("hidden");
   $("registerForm").classList.add("hidden");
 
-  $("loginMessage").textContent = "";
+  if ($("loginMessage")) $("loginMessage").textContent = "";
 }
 
 function showRegister() {
@@ -409,32 +383,28 @@ function showRegister() {
   $("loginForm").classList.add("hidden");
   $("registerForm").classList.remove("hidden");
 
-  $("registerMessage").textContent = "";
+  if ($("registerMessage")) $("registerMessage").textContent = "";
 }
 
 function showAuth() {
-  $("authScreen").classList.remove("hidden");
-  $("appScreen").classList.add("hidden");
-
+  if ($("authScreen")) $("authScreen").classList.remove("hidden");
+  if ($("appScreen")) $("appScreen").classList.add("hidden");
   showLogin();
 }
 
 function login(username, password) {
   const user = users.find(item =>
-    item.username.toLowerCase() ===
-      username.toLowerCase() &&
+    String(item.username).toLowerCase() === username.toLowerCase() &&
     item.password === password
   );
 
   if (!user) {
-    $("loginMessage").textContent =
-      "Incorrect username or password.";
+    $("loginMessage").textContent = "Incorrect username or password.";
     return;
   }
 
   if (user.active === false) {
-    $("loginMessage").textContent =
-      "Your account has been disabled.";
+    $("loginMessage").textContent = "Your account has been disabled.";
     return;
   }
 
@@ -445,9 +415,7 @@ function login(username, password) {
 
   if (!save(DB.users, users)) return;
 
-  if (!save(DB.session, {
-    userId: user.id
-  })) {
+  if (!save(DB.session, { userId: user.id })) {
     currentUser = null;
     currentRole = null;
     return;
@@ -477,8 +445,7 @@ if ($("registerForm")) {
     const confirm = $("registerConfirm").value;
 
     if (fullName.length < 2 || fullName.length > 100) {
-      $("registerMessage").textContent =
-        "Enter a valid full name.";
+      $("registerMessage").textContent = "Enter a valid full name.";
       return;
     }
 
@@ -495,26 +462,19 @@ if ($("registerForm")) {
     }
 
     if (password !== confirm) {
-      $("registerMessage").textContent =
-        "Passwords do not match.";
+      $("registerMessage").textContent = "Passwords do not match.";
       return;
     }
 
     if (users.some(user =>
-      user.username.toLowerCase() ===
-      username.toLowerCase()
+      user.username.toLowerCase() === username.toLowerCase()
     )) {
-      $("registerMessage").textContent =
-        "Username is already taken.";
+      $("registerMessage").textContent = "Username is already taken.";
       return;
     }
 
     const user = {
-      id: Math.max(
-        0,
-        ...users.map(item => Number(item.id) || 0)
-      ) + 1,
-
+      id: Math.max(0, ...users.map(item => Number(item.id) || 0)) + 1,
       fullName,
       username,
       password,
@@ -536,7 +496,6 @@ if ($("registerForm")) {
     $("loginUsername").value = username;
 
     showLogin();
-
     $("loginMessage").textContent =
       "Account created successfully. Please log in.";
   });
@@ -545,30 +504,21 @@ if ($("registerForm")) {
 document.querySelectorAll(".toggle-password").forEach(button => {
   button.addEventListener("click", () => {
     const input = $(button.dataset.target);
-
     if (!input) return;
 
-    input.type =
-      input.type === "password"
-        ? "text"
-        : "password";
-
-    button.textContent =
-      input.type === "password"
-        ? "Show"
-        : "Hide";
+    input.type = input.type === "password" ? "text" : "password";
+    button.textContent = input.type === "password" ? "Show" : "Hide";
   });
 });
 
 function logout() {
-  if (!confirm("Are you sure you want to log out?")) {
-    return;
-  }
+  if (!confirm("Are you sure you want to log out?")) return;
 
   localStorage.removeItem(DB.session);
 
   currentUser = null;
   currentRole = null;
+  selectedCartProducts.clear();
 
   showAuth();
   notify("You have logged out.");
@@ -587,7 +537,7 @@ function restoreSession() {
   }
 
   const user = users.find(item =>
-    item.id === session.userId &&
+    Number(item.id) === Number(session.userId) &&
     item.active !== false
   );
 
@@ -617,19 +567,12 @@ function openApplication() {
   $("welcomeText").textContent = currentUser.fullName;
 
   $("roleLabel").textContent =
-    currentRole === "admin"
-      ? "Administrator"
-      : "Customer";
+    currentRole === "admin" ? "Administrator" : "Customer";
 
-  $("customerNav").classList.toggle(
-    "hidden",
-    currentRole !== "customer"
-  );
+  $("customerNav").classList.toggle("hidden", currentRole !== "customer");
+  $("adminNav").classList.toggle("hidden", currentRole !== "admin");
 
-  $("adminNav").classList.toggle(
-    "hidden",
-    currentRole !== "admin"
-  );
+  selectedCartProducts.clear();
 
   if (currentRole === "admin") {
     adminPage("dashboard");
@@ -649,9 +592,7 @@ function goHome() {
 }
 
 function closeAllPages() {
-  document.querySelectorAll(
-    ".main-content .page"
-  ).forEach(page => {
+  document.querySelectorAll(".main-content .page").forEach(page => {
     page.classList.add("hidden");
   });
 }
@@ -663,16 +604,13 @@ function activateNav(nav, button) {
     link.classList.remove("active");
   });
 
-  if (button) {
-    button.classList.add("active");
-  }
+  if (button) button.classList.add("active");
 }
 
 function setPage(id, title) {
   closeAllPages();
 
   const page = $(id);
-
   if (!page) return;
 
   page.classList.remove("hidden");
@@ -683,10 +621,7 @@ function setPage(id, title) {
 
   currentPage = id;
 
-  window.scrollTo({
-    top: 0,
-    behavior: "smooth"
-  });
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 function customerPage(page, button) {
@@ -709,29 +644,12 @@ function customerPage(page, button) {
   setPage(...pages[page]);
 
   switch (page) {
-    case "shop":
-      renderShop();
-      break;
-
-    case "cart":
-      renderCart();
-      break;
-
-    case "orders":
-      renderCustomerOrders();
-      break;
-
-    case "receipts":
-      renderCustomerReceipts();
-      break;
-
-    case "transactions":
-      renderTransactions();
-      break;
-
-    case "profile":
-      loadProfile();
-      break;
+    case "shop": renderShop(); break;
+    case "cart": renderCart(); break;
+    case "orders": renderCustomerOrders(); break;
+    case "receipts": renderCustomerReceipts(); break;
+    case "transactions": renderTransactions(); break;
+    case "profile": loadProfile(); break;
   }
 }
 
@@ -754,41 +672,19 @@ function adminPage(page, button) {
   setPage(...pages[page]);
 
   switch (page) {
-    case "dashboard":
-      renderDashboard();
-      break;
-
-    case "products":
-      renderAdminProducts();
-      break;
-
-    case "inventory":
-      renderInventory();
-      break;
-
-    case "orders":
-      renderAdminOrders();
-      break;
-
-    case "users":
-      renderAdminUsers();
-      break;
-
-    case "settings":
-      loadSettings();
-      break;
+    case "dashboard": renderDashboard(); break;
+    case "products": renderAdminProducts(); break;
+    case "inventory": renderInventory(); break;
+    case "orders": renderAdminOrders(); break;
+    case "users": renderAdminUsers(); break;
+    case "settings": loadSettings(); break;
   }
 }
 
 function closeModal(id) {
   const modal = $(id);
-
-  if (modal) {
-    modal.classList.add("hidden");
-  }
+  if (modal) modal.classList.add("hidden");
 }
-
-/* Make functions available to HTML onclick attributes. */
 
 window.showLogin = showLogin;
 window.showRegister = showRegister;
@@ -805,10 +701,8 @@ window.closeModal = closeModal;
 function isImageSource(value) {
   const image = String(value || "").trim();
 
-  return (
-    /^https?:\/\//i.test(image) ||
-    /^data:image\//i.test(image)
-  );
+  return /^https?:\/\//i.test(image) ||
+    /^data:image\//i.test(image);
 }
 
 function productVisual(product, className = "product-image") {
@@ -846,25 +740,14 @@ function productCard(product) {
         <h3>${escapeHTML(product.name)}</h3>
 
         <p>
-          ${escapeHTML(
-            product.description || product.category
-          )}
+          ${escapeHTML(product.description || product.category)}
         </p>
 
         <div class="product-meta">
-
-          <span class="price">
-            ${money(product.price)}
-          </span>
-
+          <span class="price">${money(product.price)}</span>
           <span class="stock">
-            ${
-              outOfStock
-                ? "Out of stock"
-                : `${product.stock} available`
-            }
+            ${outOfStock ? "Out of stock" : `${product.stock} available`}
           </span>
-
         </div>
 
         <div class="quantity-row">
@@ -910,41 +793,26 @@ function bindShopActions(container) {
   container.querySelectorAll("[data-add-cart]").forEach(button => {
     button.addEventListener("click", () => {
       const id = Number(button.dataset.addCart);
+      const input = container.querySelector(`[data-quantity="${id}"]`);
 
-      const quantityInput = container.querySelector(
-        `[data-quantity="${id}"]`
-      );
-
-      addToCart(
-        id,
-        Number(quantityInput?.value || 1)
-      );
+      addToCart(id, Number(input?.value || 1));
     });
   });
 
   container.querySelectorAll("[data-buy-now]").forEach(button => {
     button.addEventListener("click", () => {
       const id = Number(button.dataset.buyNow);
+      const input = container.querySelector(`[data-quantity="${id}"]`);
 
-      const quantityInput = container.querySelector(
-        `[data-quantity="${id}"]`
-      );
-
-      addToCart(
-        id,
-        Number(quantityInput?.value || 1)
-      );
-
-      if (getCart().some(item =>
-        item.productId === id
-      )) {
+      if (addToCart(id, Number(input?.value || 1))) {
+        selectedCartProducts.clear();
+        selectedCartProducts.add(String(id));
         customerPage("cart");
       }
     });
   });
 }
 
-/* END OF PART 1 */
 /* =========================================================
    8. CUSTOMER SHOP
 ========================================================= */
@@ -952,10 +820,8 @@ function bindShopActions(container) {
 function renderShop() {
   if (currentRole !== "customer") return;
 
-  const searchInput = $("productSearch");
-
-  const query = searchInput
-    ? searchInput.value.toLowerCase().trim()
+  const query = $("productSearch")
+    ? $("productSearch").value.toLowerCase().trim()
     : "";
 
   const list = products.filter(product =>
@@ -976,7 +842,7 @@ if ($("productSearch")) {
 }
 
 /* =========================================================
-   9. SHOPPING CART
+   9. SHOPPING CART WITH PRODUCT SELECTION
 ========================================================= */
 
 function addToCart(productId, quantity) {
@@ -986,11 +852,7 @@ function addToCart(productId, quantity) {
     item => Number(item.id) === Number(productId)
   );
 
-  if (
-    !product ||
-    !Number.isInteger(quantity) ||
-    quantity < 1
-  ) {
+  if (!product || !Number.isInteger(quantity) || quantity < 1) {
     notify("Please enter a valid quantity.", "error");
     return false;
   }
@@ -1006,37 +868,24 @@ function addToCart(productId, quantity) {
     item => Number(item.productId) === Number(productId)
   );
 
-  const newQuantity =
-    Number(existing?.quantity || 0) + quantity;
+  const newQuantity = Number(existing?.quantity || 0) + quantity;
 
   if (newQuantity > product.stock) {
-    notify(
-      "Cart quantity exceeds available stock.",
-      "error"
-    );
-
+    notify("Cart quantity exceeds available stock.", "error");
     return false;
   }
 
-  // Create a new cart instead of mutating the original.
   const updated = existing
     ? cart.map(item =>
         Number(item.productId) === Number(productId)
           ? { ...item, quantity: newQuantity }
           : { ...item }
       )
-    : [
-        ...cart,
-        {
-          productId: product.id,
-          quantity
-        }
-      ];
+    : [...cart, { productId: product.id, quantity }];
 
   if (!setCart(updated)) return false;
 
   renderShop();
-
   notify("Flower added to your cart.");
 
   return true;
@@ -1053,12 +902,54 @@ function updateCartCount() {
   }
 }
 
+/* Return only valid cart products. */
+function getValidCartItems() {
+  return getCart().map(item => ({
+    ...item,
+    product: products.find(
+      product => Number(product.id) === Number(item.productId)
+    )
+  })).filter(item => item.product);
+}
+
+/* Return selected cart products only. */
+function getSelectedCartItems() {
+  return getValidCartItems().filter(item =>
+    selectedCartProducts.has(String(item.productId))
+  );
+}
+
+function toggleCartProduct(productId, checked) {
+  const key = String(productId);
+
+  if (checked) {
+    selectedCartProducts.add(key);
+  } else {
+    selectedCartProducts.delete(key);
+  }
+
+  renderCart();
+}
+
+function toggleSelectAllCart(checked) {
+  if (checked) {
+    getValidCartItems().forEach(item => {
+      selectedCartProducts.add(String(item.productId));
+    });
+  } else {
+    selectedCartProducts.clear();
+  }
+
+  renderCart();
+}
+
 function removeFromCart(productId) {
   const updated = getCart().filter(
     item => Number(item.productId) !== Number(productId)
   );
 
   if (setCart(updated)) {
+    selectedCartProducts.delete(String(productId));
     renderCart();
     notify("Product removed from cart.");
   }
@@ -1069,23 +960,14 @@ function changeCartQuantity(productId, quantity) {
     item => Number(item.id) === Number(productId)
   );
 
-  if (
-    !product ||
-    !Number.isInteger(quantity) ||
-    quantity < 1
-  ) {
-    renderCart();
-
+  if (!product || !Number.isInteger(quantity) || quantity < 1) {
     notify("Please enter a valid quantity.", "error");
+    renderCart();
     return;
   }
 
   if (quantity > product.stock) {
-    notify(
-      "Quantity exceeds available stock.",
-      "error"
-    );
-
+    notify("Quantity exceeds available stock.", "error");
     renderCart();
     return;
   }
@@ -1096,32 +978,28 @@ function changeCartQuantity(productId, quantity) {
       : { ...item }
   );
 
-  if (setCart(updated)) {
-    renderCart();
-  }
+  if (setCart(updated)) renderCart();
 }
 
 function renderCart() {
   if (currentRole !== "customer") return;
 
-  const cart = getCart();
+  const cart = getValidCartItems();
 
-  const validItems = cart.map(item => ({
-    ...item,
-    product: products.find(
-      product =>
-        Number(product.id) === Number(item.productId)
-    )
-  })).filter(item => item.product);
+  /* Remove selections for products no longer in the cart. */
+  const validIds = new Set(
+    cart.map(item => String(item.productId))
+  );
 
-  if (!validItems.length) {
+  selectedCartProducts.forEach(id => {
+    if (!validIds.has(id)) selectedCartProducts.delete(id);
+  });
+
+  if (!cart.length) {
     $("cartContent").innerHTML = `
       <div class="empty-state">
         <strong>Your cart is empty.</strong>
-
-        <p>
-          Browse our flower collection and add your favorites.
-        </p>
+        <p>Browse our flower collection and add your favorites.</p>
 
         <button
           class="btn btn-primary"
@@ -1137,68 +1015,102 @@ function renderCart() {
     return;
   }
 
-  const total = validItems.reduce(
+  const selectedItems = getSelectedCartItems();
+
+  const selectedTotal = selectedItems.reduce(
     (sum, item) =>
-      sum + Number(item.product.price) * item.quantity,
+      sum + Number(item.product.price) * Number(item.quantity),
     0
   );
+
+  const selectedQuantity = selectedItems.reduce(
+    (sum, item) => sum + Number(item.quantity),
+    0
+  );
+
+  const allSelected =
+    cart.length > 0 && cart.every(item =>
+      selectedCartProducts.has(String(item.productId))
+    );
 
   $("cartContent").innerHTML = `
     <div class="cart-layout">
 
-      <div>
+      <div class="cart-products-area">
 
-        ${validItems.map(item => `
-          <div class="cart-item">
+        <div class="cart-select-all">
+          <label>
+            <input
+              type="checkbox"
+              id="selectAllCart"
+              ${allSelected ? "checked" : ""}
+            >
+            <strong>Select All Products</strong>
+          </label>
+        </div>
 
-            <div class="cart-thumb">
-              ${
-                isImageSource(item.product.image)
-                  ? `
-                    <img
-                      src="${escapeHTML(item.product.image)}"
-                      alt="${escapeHTML(item.product.name)}"
-                    >
-                  `
-                  : escapeHTML(item.product.image || "🌸")
-              }
-            </div>
+        ${cart.map(item => {
+          const product = item.product;
+          const isSelected = selectedCartProducts.has(
+            String(item.productId)
+          );
 
-            <div class="cart-detail">
+          return `
+            <div class="cart-item">
+
+              <label class="cart-item-checkbox">
+                <input
+                  type="checkbox"
+                  data-select-cart="${product.id}"
+                  ${isSelected ? "checked" : ""}
+                  aria-label="Select ${escapeHTML(product.name)}"
+                >
+              </label>
+
+              <div class="cart-thumb">
+                ${
+                  isImageSource(product.image)
+                    ? `
+                      <img
+                        src="${escapeHTML(product.image)}"
+                        alt="${escapeHTML(product.name)}"
+                      >
+                    `
+                    : escapeHTML(product.image || "🌸")
+                }
+              </div>
+
+              <div class="cart-detail">
+                <strong>${escapeHTML(product.name)}</strong>
+                <small>${money(product.price)} each</small>
+                <small>${product.stock} available</small>
+              </div>
+
+              <input
+                class="cart-quantity"
+                type="number"
+                min="1"
+                max="${product.stock}"
+                value="${item.quantity}"
+                aria-label="Quantity for ${escapeHTML(product.name)}"
+                data-cart-quantity="${product.id}"
+              >
 
               <strong>
-                ${escapeHTML(item.product.name)}
+                ${money(product.price * item.quantity)}
               </strong>
 
-              <small>
-                ${money(item.product.price)} each
-              </small>
+              <button
+                class="btn-danger"
+                type="button"
+                data-remove-cart="${product.id}"
+              >
+                Remove
+              </button>
 
             </div>
-
-            <input
-              type="number"
-              min="1"
-              max="${item.product.stock}"
-              value="${item.quantity}"
-              aria-label="Cart quantity"
-              data-cart-quantity="${item.productId}"
-            >
-
-            <strong>
-              ${money(item.product.price * item.quantity)}
-            </strong>
-
-            <button
-              class="btn-danger"
-              type="button"
-              data-remove-cart="${item.productId}"
-            >
-              Remove
-            </button>
-
-          </div>
-        `).join("")}
+          `;
+        }).join("")}
 
       </div>
 
@@ -1207,27 +1119,32 @@ function renderCart() {
         <h2>Order Summary</h2>
 
         <div class="summary-line">
-          <span>Items</span>
+          <span>Products in Cart</span>
+          <strong>${cart.length}</strong>
+        </div>
 
-          <span>
-            ${validItems.reduce(
-              (sum, item) => sum + item.quantity,
-              0
-            )}
-          </span>
+        <div class="summary-line">
+          <span>Selected Quantity</span>
+          <strong>${selectedQuantity}</strong>
+        </div>
+
+        <div class="summary-line">
+          <span>Selected Products</span>
+          <strong>${selectedItems.length}</strong>
         </div>
 
         <div class="summary-line summary-total">
-          <span>Total</span>
-          <span>${money(total)}</span>
+          <span>Selected Total</span>
+          <strong>${money(selectedTotal)}</strong>
         </div>
 
         <button
           class="btn btn-primary full"
           id="cartCheckout"
           type="button"
+          ${selectedItems.length === 0 ? "disabled" : ""}
         >
-          Proceed to Checkout
+          Checkout Selected (${selectedItems.length})
         </button>
 
         <button
@@ -1238,14 +1155,30 @@ function renderCart() {
           Continue Shopping
         </button>
 
+        <p class="muted">
+          Only selected products will be included in your order.
+          Unselected products will remain in your cart.
+        </p>
+
       </aside>
 
     </div>
   `;
 
-  $("cartContent").querySelectorAll(
-    "[data-cart-quantity]"
-  ).forEach(input => {
+  $("selectAllCart").addEventListener("change", event => {
+    toggleSelectAllCart(event.target.checked);
+  });
+
+  $("cartContent").querySelectorAll("[data-select-cart]").forEach(input => {
+    input.addEventListener("change", () => {
+      toggleCartProduct(
+        Number(input.dataset.selectCart),
+        input.checked
+      );
+    });
+  });
+
+  $("cartContent").querySelectorAll("[data-cart-quantity]").forEach(input => {
     input.addEventListener("change", () => {
       changeCartQuantity(
         Number(input.dataset.cartQuantity),
@@ -1254,82 +1187,62 @@ function renderCart() {
     });
   });
 
-  $("cartContent").querySelectorAll(
-    "[data-remove-cart]"
-  ).forEach(button => {
+  $("cartContent").querySelectorAll("[data-remove-cart]").forEach(button => {
     button.addEventListener("click", () => {
-      removeFromCart(
-        Number(button.dataset.removeCart)
-      );
+      removeFromCart(Number(button.dataset.removeCart));
     });
   });
 
-  $("cartCheckout").addEventListener(
-    "click",
-    openCheckout
-  );
+  $("cartCheckout").addEventListener("click", openCheckout);
 }
 
 /* =========================================================
-   10. CHECKOUT
+   10. CHECKOUT - SELECTED PRODUCTS ONLY
 ========================================================= */
 
 function openCheckout() {
   if (currentRole !== "customer") return;
 
-  const cart = getCart();
+  const items = getSelectedCartItems();
 
-  if (!cart.length) {
-    notify("Your cart is empty.", "error");
+  if (!items.length) {
+    notify("Please select at least one product to checkout.", "error");
     return;
   }
 
-  const items = cart.map(item => ({
-    ...item,
-    product: products.find(
-      product =>
-        Number(product.id) === Number(item.productId)
-    )
-  }));
-
   const unavailable = items.some(item =>
     !item.product ||
-    !Number.isInteger(item.quantity) ||
-    item.quantity < 1 ||
-    item.quantity > item.product.stock
+    !Number.isInteger(Number(item.quantity)) ||
+    Number(item.quantity) < 1 ||
+    Number(item.quantity) > Number(item.product.stock)
   );
 
   if (unavailable) {
-    notify(
-      "Please update your cart. Some items are unavailable.",
-      "error"
-    );
-
+    notify("Please update your selection. Some items are unavailable.", "error");
     renderCart();
     return;
   }
 
   const total = items.reduce(
     (sum, item) =>
-      sum + item.product.price * item.quantity,
+      sum + Number(item.product.price) * Number(item.quantity),
     0
   );
 
   $("checkoutSummary").innerHTML = `
     <div class="cart-summary">
 
+      <h3>Selected Products</h3>
+
       ${items.map(item => `
         <div class="summary-line">
-
           <span>
-            ${escapeHTML(item.product.name)}
-            × ${item.quantity}
+            ${escapeHTML(item.product.name)} × ${item.quantity}
           </span>
 
           <strong>
             ${money(item.product.price * item.quantity)}
           </strong>
-
         </div>
       `).join("")}
 
@@ -1341,14 +1254,9 @@ function openCheckout() {
     </div>
   `;
 
-  $("checkoutName").value =
-    currentUser.fullName || "";
-
-  $("checkoutPhone").value =
-    currentUser.phone || "";
-
-  $("checkoutAddress").value =
-    currentUser.address || "";
+  $("checkoutName").value = currentUser.fullName || "";
+  $("checkoutPhone").value = currentUser.phone || "";
+  $("checkoutAddress").value = currentUser.address || "";
 
   $("checkoutModal").classList.remove("hidden");
 }
@@ -1374,64 +1282,56 @@ if ($("checkoutForm")) {
     }
 
     if (address.length < 8 || address.length > 300) {
-      notify(
-        "Please enter a complete delivery address.",
-        "error"
-      );
-
+      notify("Please enter a complete delivery address.", "error");
       return;
     }
 
-    const cart = getCart();
+    /* Get only selected products. */
+    const selectedItems = getSelectedCartItems();
 
-    if (!cart.length) {
+    if (!selectedItems.length) {
+      notify("Please select at least one product.", "error");
       closeModal("checkoutModal");
-      notify("Your cart is empty.", "error");
       return;
     }
 
-    const items = [];
+    const orderItems = [];
 
-    for (const cartItem of cart) {
+    for (const cartItem of selectedItems) {
       const product = products.find(
-        item =>
-          Number(item.id) === Number(cartItem.productId)
+        item => Number(item.id) === Number(cartItem.productId)
       );
 
       if (
         !product ||
-        !Number.isInteger(cartItem.quantity) ||
-        cartItem.quantity < 1 ||
-        cartItem.quantity > product.stock
+        !Number.isInteger(Number(cartItem.quantity)) ||
+        Number(cartItem.quantity) < 1 ||
+        Number(cartItem.quantity) > Number(product.stock)
       ) {
         notify(
           "An item is unavailable or has insufficient stock.",
           "error"
         );
-
         return;
       }
 
-      items.push({
+      orderItems.push({
         productId: product.id,
         name: product.name,
         image: product.image,
-        price: product.price,
-        quantity: cartItem.quantity,
-        subtotal: product.price * cartItem.quantity
+        price: Number(product.price),
+        quantity: Number(cartItem.quantity),
+        subtotal: Number(product.price) * Number(cartItem.quantity)
       });
     }
 
-    const total = items.reduce(
+    const total = orderItems.reduce(
       (sum, item) => sum + item.subtotal,
       0
     );
 
-    // Save original data for rollback.
-    const oldProducts = products.map(
-      product => ({ ...product })
-    );
-
+    /* Save original data for rollback if storage fails. */
+    const oldProducts = products.map(product => ({ ...product }));
     const oldOrders = [...orders];
     const oldQueue = orderQueue.toArray();
     const oldId = nextOrderId;
@@ -1443,8 +1343,12 @@ if ($("checkoutForm")) {
       address: currentUser.address
     };
 
-    // Deduct stock.
-    items.forEach(item => {
+    const purchasedIds = new Set(
+      orderItems.map(item => String(item.productId))
+    );
+
+    /* Deduct stock only for selected products. */
+    orderItems.forEach(item => {
       const product = products.find(
         p => Number(p.id) === Number(item.productId)
       );
@@ -1459,24 +1363,23 @@ if ($("checkoutForm")) {
       phone,
       address,
       payment: "Cash on Delivery",
-      items,
+      items: orderItems,
       total,
       status: "Pending",
       date: new Date().toISOString()
     };
 
     orders.unshift(order);
-
-    // Add new order to the FIFO queue.
     orderQueue.enqueue(order.id);
 
-    // Update customer information.
     currentUser.fullName = name;
     currentUser.phone = phone;
     currentUser.address = address;
 
-    // Empty the customer's cart.
-    carts[currentUser.id] = [];
+    /* Keep every unselected product in the cart. */
+    carts[currentUser.id] = getCart().filter(item =>
+      !purchasedIds.has(String(item.productId))
+    );
 
     if (!saveAll()) {
       products = oldProducts;
@@ -1486,24 +1389,22 @@ if ($("checkoutForm")) {
       carts = oldCarts;
 
       Object.assign(currentUser, oldUser);
-
       return;
     }
 
-    $("checkoutForm").reset();
+    /* Clear only the selected product IDs. */
+    purchasedIds.forEach(id => selectedCartProducts.delete(id));
 
+    $("checkoutForm").reset();
     closeModal("checkoutModal");
 
     $("headerUser").textContent = currentUser.fullName;
     $("welcomeText").textContent = currentUser.fullName;
 
     updateCartCount();
-
     customerPage("orders");
 
-    notify(
-      `Order PV-${order.id} placed successfully!`
-    );
+    notify(`Order PV-${order.id} placed successfully!`);
   });
 }
 
@@ -1514,7 +1415,6 @@ if ($("checkoutForm")) {
 function statusClass(status) {
   if (status === "Completed") return "delivered";
   if (status === "Cancelled") return "cancelled";
-
   return "";
 }
 
@@ -1528,24 +1428,18 @@ function renderCustomerOrders() {
   if (!currentUser) return;
 
   const list = orders.filter(
-    order => order.customerId === currentUser.id
+    order => Number(order.customerId) === Number(currentUser.id)
   );
 
   if (!list.length) {
-    $("customerOrders").innerHTML = `
-      <div class="empty-state">
-        You have no orders yet.
-      </div>
-    `;
-
+    $("customerOrders").innerHTML =
+      '<div class="empty-state">You have no orders yet.</div>';
     return;
   }
 
   $("customerOrders").innerHTML = `
     <div class="table-wrap">
-
       <table>
-
         <thead>
           <tr>
             <th>Order ID</th>
@@ -1558,30 +1452,17 @@ function renderCustomerOrders() {
         </thead>
 
         <tbody>
-
           ${list.map(order => `
             <tr>
-
               <td>PV-${order.id}</td>
-
-              <td>
-                ${escapeHTML(formatDate(order.date))}
-              </td>
-
-              <td>
-                ${orderItemsText(order)}
-              </td>
-
-              <td>
-                ${money(order.total)}
-              </td>
-
+              <td>${escapeHTML(formatDate(order.date))}</td>
+              <td>${orderItemsText(order)}</td>
+              <td>${money(order.total)}</td>
               <td>
                 <span class="status ${statusClass(order.status)}">
                   ${escapeHTML(order.status)}
                 </span>
               </td>
-
               <td>
                 <button
                   class="btn-soft"
@@ -1591,14 +1472,10 @@ function renderCustomerOrders() {
                   View
                 </button>
               </td>
-
             </tr>
           `).join("")}
-
         </tbody>
-
       </table>
-
     </div>
   `;
 
@@ -1609,20 +1486,14 @@ function renderAdminOrders() {
   if (currentRole !== "admin") return;
 
   if (!orders.length) {
-    $("adminOrders").innerHTML = `
-      <div class="empty-state">
-        No orders have been placed.
-      </div>
-    `;
-
+    $("adminOrders").innerHTML =
+      '<div class="empty-state">No orders have been placed.</div>';
     return;
   }
 
   $("adminOrders").innerHTML = `
     <div class="table-wrap">
-
       <table>
-
         <thead>
           <tr>
             <th>Order</th>
@@ -1636,33 +1507,22 @@ function renderAdminOrders() {
         </thead>
 
         <tbody>
-
           ${orders.map(order => `
             <tr>
-
               <td>
                 <strong>PV-${order.id}</strong>
                 <br>
-                <small>
-                  ${escapeHTML(formatDate(order.date))}
-                </small>
+                <small>${escapeHTML(formatDate(order.date))}</small>
               </td>
 
               <td>
                 ${escapeHTML(order.customerName)}
                 <br>
-                <small>
-                  ${escapeHTML(order.phone)}
-                </small>
+                <small>${escapeHTML(order.phone)}</small>
               </td>
 
-              <td>
-                ${orderItemsText(order)}
-              </td>
-
-              <td>
-                ${money(order.total)}
-              </td>
+              <td>${orderItemsText(order)}</td>
+              <td>${money(order.total)}</td>
 
               <td>
                 <span class="status ${statusClass(order.status)}">
@@ -1671,16 +1531,8 @@ function renderAdminOrders() {
               </td>
 
               <td>
-                <select
-                  data-order-status="${order.id}"
-                  aria-label="Order status"
-                >
-                  ${[
-                    "Pending",
-                    "Processing",
-                    "Completed",
-                    "Cancelled"
-                  ].map(status => `
+                <select data-order-status="${order.id}" aria-label="Order status">
+                  ${["Pending", "Processing", "Completed", "Cancelled"].map(status => `
                     <option
                       value="${status}"
                       ${order.status === status ? "selected" : ""}
@@ -1700,44 +1552,28 @@ function renderAdminOrders() {
                   Receipt
                 </button>
               </td>
-
             </tr>
           `).join("")}
-
         </tbody>
-
       </table>
-
     </div>
 
     <div class="cart-summary" style="margin-top:20px">
-
       <strong>FIFO Pending Order Queue</strong>
 
       <p class="muted">
         Oldest pending order:
-        ${
-          orderQueue.peek() === null
-            ? "No pending orders"
-            : "PV-" + orderQueue.peek()
-        }
+        ${orderQueue.peek() === null ? "No pending orders" : "PV-" + orderQueue.peek()}
       </p>
 
       <p class="muted">
         Queue:
-        ${
-          orderQueue.toArray()
-            .map(id => "PV-" + id)
-            .join(" → ") || "Empty"
-        }
+        ${orderQueue.toArray().map(id => "PV-" + id).join(" → ") || "Empty"}
       </p>
-
     </div>
   `;
 
-  $("adminOrders").querySelectorAll(
-    "[data-order-status]"
-  ).forEach(select => {
+  $("adminOrders").querySelectorAll("[data-order-status]").forEach(select => {
     select.addEventListener("change", () => {
       updateOrderStatus(
         Number(select.dataset.orderStatus),
@@ -1752,26 +1588,16 @@ function renderAdminOrders() {
 function updateOrderStatus(id, newStatus) {
   if (currentRole !== "admin") return;
 
-  const order = orders.find(
-    item => Number(item.id) === Number(id)
-  );
-
+  const order = orders.find(item => Number(item.id) === Number(id));
   if (!order) return;
 
-  const allowed = [
-    "Pending",
-    "Processing",
-    "Completed",
-    "Cancelled"
-  ];
-
+  const allowed = ["Pending", "Processing", "Completed", "Cancelled"];
   if (!allowed.includes(newStatus)) return;
 
   const oldStatus = order.status;
-
   if (oldStatus === newStatus) return;
 
-  // FIFO: the oldest pending order must be handled first.
+  /* Enforce FIFO when starting a pending order. */
   if (
     ["Processing", "Completed"].includes(newStatus) &&
     oldStatus === "Pending" &&
@@ -1781,53 +1607,36 @@ function updateOrderStatus(id, newStatus) {
       `FIFO rule: process PV-${orderQueue.peek()} first.`,
       "error"
     );
-
     renderAdminOrders();
     return;
   }
 
-  const oldProducts = products.map(
-    product => ({ ...product })
-  );
-
+  const oldProducts = products.map(product => ({ ...product }));
   const oldQueue = orderQueue.toArray();
 
-  // Restore stock when cancelling.
-  if (
-    newStatus === "Cancelled" &&
-    oldStatus !== "Cancelled"
-  ) {
+  /* Restore stock when an order is cancelled. */
+  if (newStatus === "Cancelled" && oldStatus !== "Cancelled") {
     order.items.forEach(item => {
       const product = products.find(
         p => Number(p.id) === Number(item.productId)
       );
 
-      if (product) {
-        product.stock += item.quantity;
-      }
+      if (product) product.stock += Number(item.quantity);
     });
   }
 
-  // Check stock before reactivating a cancelled order.
-  if (
-    oldStatus === "Cancelled" &&
-    newStatus !== "Cancelled"
-  ) {
+  /* Deduct stock again if a cancelled order is reactivated. */
+  if (oldStatus === "Cancelled" && newStatus !== "Cancelled") {
     const available = order.items.every(item => {
       const product = products.find(
         p => Number(p.id) === Number(item.productId)
       );
 
-      return product &&
-        product.stock >= item.quantity;
+      return product && product.stock >= Number(item.quantity);
     });
 
     if (!available) {
-      notify(
-        "Not enough stock to reactivate this order.",
-        "error"
-      );
-
+      notify("Not enough stock to reactivate this order.", "error");
       renderAdminOrders();
       return;
     }
@@ -1837,16 +1646,14 @@ function updateOrderStatus(id, newStatus) {
         p => Number(p.id) === Number(item.productId)
       );
 
-      product.stock -= item.quantity;
+      product.stock -= Number(item.quantity);
     });
   }
 
-  // Remove an order from the queue when it leaves Pending.
   if (oldStatus === "Pending") {
     orderQueue.remove(id);
   }
 
-  // Add an order to the queue if it becomes Pending again.
   if (newStatus === "Pending") {
     orderQueue.enqueue(id);
   }
@@ -1857,7 +1664,6 @@ function updateOrderStatus(id, newStatus) {
     order.status = oldStatus;
     products = oldProducts;
     orderQueue = new OrderQueue(oldQueue);
-
     return;
   }
 
@@ -1868,7 +1674,6 @@ function updateOrderStatus(id, newStatus) {
   notify("Order status updated.");
 }
 
-/* END OF PART 2 */
 /* =========================================================
    12. RECEIPTS
 ========================================================= */
@@ -1876,28 +1681,21 @@ function updateOrderStatus(id, newStatus) {
 function bindReceiptButtons(container) {
   if (!container) return;
 
-  container.querySelectorAll(
-    "[data-view-receipt]"
-  ).forEach(button => {
+  container.querySelectorAll("[data-view-receipt]").forEach(button => {
     button.addEventListener("click", () => {
-      showReceipt(
-        Number(button.dataset.viewReceipt)
-      );
+      showReceipt(Number(button.dataset.viewReceipt));
     });
   });
 }
 
 function showReceipt(id) {
-  const order = orders.find(
-    item => Number(item.id) === Number(id)
-  );
-
+  const order = orders.find(item => Number(item.id) === Number(id));
   if (!order) return;
 
-  // Customers can only view their own receipts.
   if (
     currentRole !== "admin" &&
-    (!currentUser || order.customerId !== currentUser.id)
+    (!currentUser ||
+      Number(order.customerId) !== Number(currentUser.id))
   ) {
     return;
   }
@@ -1913,40 +1711,15 @@ function showReceipt(id) {
 
       <hr>
 
-      <p>
-        <strong>Receipt No:</strong>
-        PV-${order.id}
-      </p>
-
-      <p>
-        <strong>Date:</strong>
-        ${escapeHTML(formatDate(order.date))}
-      </p>
-
-      <p>
-        <strong>Customer:</strong>
-        ${escapeHTML(order.customerName)}
-      </p>
-
-      <p>
-        <strong>Phone:</strong>
-        ${escapeHTML(order.phone)}
-      </p>
-
-      <p>
-        <strong>Address:</strong>
-        ${escapeHTML(order.address)}
-      </p>
-
-      <p>
-        <strong>Payment:</strong>
-        ${escapeHTML(order.payment)}
-      </p>
+      <p><strong>Receipt No:</strong> PV-${order.id}</p>
+      <p><strong>Date:</strong> ${escapeHTML(formatDate(order.date))}</p>
+      <p><strong>Customer:</strong> ${escapeHTML(order.customerName)}</p>
+      <p><strong>Phone:</strong> ${escapeHTML(order.phone)}</p>
+      <p><strong>Address:</strong> ${escapeHTML(order.address)}</p>
+      <p><strong>Payment:</strong> ${escapeHTML(order.payment)}</p>
 
       <div class="table-wrap">
-
         <table>
-
           <thead>
             <tr>
               <th>Product</th>
@@ -1957,7 +1730,6 @@ function showReceipt(id) {
           </thead>
 
           <tbody>
-
             ${(order.items || []).map(item => `
               <tr>
                 <td>${escapeHTML(item.name)}</td>
@@ -1966,11 +1738,8 @@ function showReceipt(id) {
                 <td>${money(item.subtotal)}</td>
               </tr>
             `).join("")}
-
           </tbody>
-
         </table>
-
       </div>
 
       <div class="summary-line summary-total">
@@ -1978,10 +1747,7 @@ function showReceipt(id) {
         <strong>${money(order.total)}</strong>
       </div>
 
-      <p>
-        <strong>Order Status:</strong>
-        ${escapeHTML(order.status)}
-      </p>
+      <p><strong>Order Status:</strong> ${escapeHTML(order.status)}</p>
 
       <div class="receipt-head">
         <p>We appreciate your purchase! 🌷</p>
@@ -1997,15 +1763,13 @@ function renderCustomerReceipts() {
   if (!currentUser) return;
 
   const list = orders.filter(
-    order => order.customerId === currentUser.id
+    order => Number(order.customerId) === Number(currentUser.id)
   );
 
   $("customerReceipts").innerHTML = list.length
     ? `
       <div class="table-wrap">
-
         <table>
-
           <thead>
             <tr>
               <th>Receipt Number</th>
@@ -2017,24 +1781,12 @@ function renderCustomerReceipts() {
           </thead>
 
           <tbody>
-
             ${list.map(order => `
               <tr>
-
                 <td>PV-${order.id}</td>
-
-                <td>
-                  ${escapeHTML(formatDate(order.date))}
-                </td>
-
-                <td>
-                  ${money(order.total)}
-                </td>
-
-                <td>
-                  ${escapeHTML(order.status)}
-                </td>
-
+                <td>${escapeHTML(formatDate(order.date))}</td>
+                <td>${money(order.total)}</td>
+                <td>${escapeHTML(order.status)}</td>
                 <td>
                   <button
                     class="btn-soft"
@@ -2044,21 +1796,13 @@ function renderCustomerReceipts() {
                     View Receipt
                   </button>
                 </td>
-
               </tr>
             `).join("")}
-
           </tbody>
-
         </table>
-
       </div>
     `
-    : `
-      <div class="empty-state">
-        No receipts available.
-      </div>
-    `;
+    : '<div class="empty-state">No receipts available.</div>';
 
   bindReceiptButtons($("customerReceipts"));
 }
@@ -2071,15 +1815,12 @@ function renderTransactions() {
   if (!currentUser) return;
 
   const list = orders.filter(
-    order => order.customerId === currentUser.id
+    order => Number(order.customerId) === Number(currentUser.id)
   );
 
   const totalSpent = list
     .filter(order => order.status !== "Cancelled")
-    .reduce(
-      (sum, order) => sum + Number(order.total || 0),
-      0
-    );
+    .reduce((sum, order) => sum + Number(order.total || 0), 0);
 
   $("customerTransactions").innerHTML = `
     <div class="stats-grid">
@@ -2100,9 +1841,7 @@ function renderTransactions() {
       list.length
         ? `
           <div class="table-wrap">
-
             <table>
-
               <thead>
                 <tr>
                   <th>Transaction</th>
@@ -2114,42 +1853,20 @@ function renderTransactions() {
               </thead>
 
               <tbody>
-
                 ${list.map(order => `
                   <tr>
-
                     <td>PV-${order.id}</td>
-
-                    <td>
-                      ${escapeHTML(formatDate(order.date))}
-                    </td>
-
-                    <td>
-                      ${escapeHTML(order.payment)}
-                    </td>
-
-                    <td>
-                      ${money(order.total)}
-                    </td>
-
-                    <td>
-                      ${escapeHTML(order.status)}
-                    </td>
-
+                    <td>${escapeHTML(formatDate(order.date))}</td>
+                    <td>${escapeHTML(order.payment)}</td>
+                    <td>${money(order.total)}</td>
+                    <td>${escapeHTML(order.status)}</td>
                   </tr>
                 `).join("")}
-
               </tbody>
-
             </table>
-
           </div>
         `
-        : `
-          <div class="empty-state">
-            No transactions yet.
-          </div>
-        `
+        : '<div class="empty-state">No transactions yet.</div>'
     }
   `;
 }
@@ -2161,18 +1878,10 @@ function renderTransactions() {
 function loadProfile() {
   if (!currentUser) return;
 
-  $("profileName").value =
-    currentUser.fullName || "";
-
-  $("profileUsername").value =
-    currentUser.username || "";
-
-  $("profilePhone").value =
-    currentUser.phone || "";
-
-  $("profileAddress").value =
-    currentUser.address || "";
-
+  $("profileName").value = currentUser.fullName || "";
+  $("profileUsername").value = currentUser.username || "";
+  $("profilePhone").value = currentUser.phone || "";
+  $("profileAddress").value = currentUser.address || "";
   $("profilePassword").value = "";
 }
 
@@ -2199,7 +1908,7 @@ if ($("profileForm")) {
     }
 
     if (users.some(user =>
-      user.id !== currentUser.id &&
+      Number(user.id) !== Number(currentUser.id) &&
       user.username.toLowerCase() === username.toLowerCase()
     )) {
       notify("Username is already taken.", "error");
@@ -2212,11 +1921,7 @@ if ($("profileForm")) {
     }
 
     if (password && password.length < 6) {
-      notify(
-        "Password must have at least 6 characters.",
-        "error"
-      );
-
+      notify("Password must have at least 6 characters.", "error");
       return;
     }
 
@@ -2227,9 +1932,7 @@ if ($("profileForm")) {
     currentUser.phone = phone;
     currentUser.address = address;
 
-    if (password) {
-      currentUser.password = password;
-    }
+    if (password) currentUser.password = password;
 
     if (!save(DB.users, users)) {
       Object.assign(currentUser, oldUser);
@@ -2252,7 +1955,6 @@ function openProductModal(id = null) {
   if (currentRole !== "admin") return;
 
   $("productForm").reset();
-
   $("productId").value = "";
   $("productModalTitle").textContent = "Add Product";
 
@@ -2273,39 +1975,27 @@ function openProductModal(id = null) {
     $("productId").value = product.id;
     $("productName").value = product.name;
     $("productCategory").value = product.category;
-    $("productDescription").value =
-      product.description || "";
-
+    $("productDescription").value = product.description || "";
     $("productPrice").value = product.price;
     $("productStock").value = product.stock;
 
     $("productImage").value =
-      isImageSource(product.image)
-        ? (
-            /^https?:\/\//i.test(product.image)
-              ? product.image
-              : ""
-          )
+      /^https?:\/\//i.test(product.image || "")
+        ? product.image
         : "";
 
     if (isImageSource(product.image)) {
       $("productImagePreview").src = product.image;
-
-      $("productImagePreview").classList.remove(
-        "hidden"
-      );
+      $("productImagePreview").classList.remove("hidden");
     }
 
-    $("productModalTitle").textContent =
-      "Edit Product";
+    $("productModalTitle").textContent = "Edit Product";
   }
 
   $("productModal").classList.remove("hidden");
 }
 
 window.openProductModal = openProductModal;
-
-/* Clear uploaded image when the user enters a new image URL. */
 
 if ($("productImage")) {
   $("productImage").addEventListener("input", () => {
@@ -2317,10 +2007,7 @@ if ($("productImage")) {
 
     if (/^https?:\/\/\S+$/i.test(imageURL)) {
       $("productImagePreview").src = imageURL;
-
-      $("productImagePreview").classList.remove(
-        "hidden"
-      );
+      $("productImagePreview").classList.remove("hidden");
     } else if (!imageURL) {
       $("productImagePreview").classList.add("hidden");
       $("productImagePreview").removeAttribute("src");
@@ -2328,27 +2015,19 @@ if ($("productImage")) {
   });
 }
 
-/* Upload product image from the computer. */
-
 if ($("productImageFile")) {
   $("productImageFile").addEventListener("change", () => {
     const file = $("productImageFile").files[0];
-
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
       notify("Please select an image file.", "error");
-
       $("productImageFile").value = "";
       return;
     }
 
     if (file.size > 700000) {
-      notify(
-        "Please select an image smaller than 700 KB.",
-        "error"
-      );
-
+      notify("Please select an image smaller than 700 KB.", "error");
       $("productImageFile").value = "";
       return;
     }
@@ -2357,10 +2036,7 @@ if ($("productImageFile")) {
 
     reader.onload = () => {
       $("productImagePreview").src = reader.result;
-
-      $("productImagePreview").classList.remove(
-        "hidden"
-      );
+      $("productImagePreview").classList.remove("hidden");
 
       selectedProduct = {
         ...(selectedProduct || {}),
@@ -2376,8 +2052,6 @@ if ($("productImageFile")) {
   });
 }
 
-/* Save product. */
-
 if ($("productForm")) {
   $("productForm").addEventListener("submit", event => {
     event.preventDefault();
@@ -2387,9 +2061,7 @@ if ($("productForm")) {
     const id = Number($("productId").value);
     const name = $("productName").value.trim();
     const category = $("productCategory").value;
-    const description =
-      $("productDescription").value.trim();
-
+    const description = $("productDescription").value.trim();
     const price = Number($("productPrice").value);
     const stock = Number($("productStock").value);
 
@@ -2401,9 +2073,7 @@ if ($("productForm")) {
       image = selectedProduct.image || "🌸";
     }
 
-    if (!image) {
-      image = "🌸";
-    }
+    if (!image) image = "🌸";
 
     if (name.length < 2 || name.length > 100) {
       notify("Enter a valid product name.", "error");
@@ -2441,27 +2111,16 @@ if ($("productForm")) {
       return;
     }
 
-    if (
-      !isImageSource(image) &&
-      image.length > 20
-    ) {
-      notify(
-        "Use a valid image URL or a short flower symbol.",
-        "error"
-      );
-
+    if (!isImageSource(image) && image.length > 20) {
+      notify("Use a valid image URL or a short flower symbol.", "error");
       return;
     }
 
-    const previous = products.map(
-      product => ({ ...product })
-    );
+    const previous = products.map(product => ({ ...product }));
+    const oldNextProductId = nextProductId;
 
     if (id) {
-      const product = products.find(
-        item => Number(item.id) === id
-      );
-
+      const product = products.find(item => Number(item.id) === id);
       if (!product) return;
 
       Object.assign(product, {
@@ -2472,7 +2131,6 @@ if ($("productForm")) {
         stock,
         image
       });
-
     } else {
       products.push({
         id: nextProductId++,
@@ -2487,34 +2145,26 @@ if ($("productForm")) {
 
     if (!saveAll()) {
       products = previous;
+      nextProductId = oldNextProductId;
       return;
     }
 
     selectedProduct = null;
-
     closeModal("productModal");
 
     renderAdminProducts();
     renderInventory();
     renderDashboard();
 
-    notify(
-      id
-        ? "Product updated successfully."
-        : "Product added successfully."
-    );
+    notify(id ? "Product updated successfully." : "Product added successfully.");
   });
 }
-
-/* Display products in admin panel. */
 
 function renderAdminProducts() {
   if (currentRole !== "admin") return;
 
-  const searchInput = $("adminProductSearch");
-
-  const query = searchInput
-    ? searchInput.value.toLowerCase().trim()
+  const query = $("adminProductSearch")
+    ? $("adminProductSearch").value.toLowerCase().trim()
     : "";
 
   const list = products.filter(product =>
@@ -2529,7 +2179,6 @@ function renderAdminProducts() {
           <div class="admin-item-main">
 
             <div class="cart-thumb">
-
               ${
                 isImageSource(product.image)
                   ? `
@@ -2540,30 +2189,17 @@ function renderAdminProducts() {
                   `
                   : escapeHTML(product.image || "🌸")
               }
-
             </div>
 
             <div class="cart-detail">
-
-              <strong>
-                ${escapeHTML(product.name)}
-              </strong>
-
-              <small>
-                ${escapeHTML(product.category)}
-                · ${money(product.price)}
-              </small>
-
-              <small>
-                Stock: ${product.stock}
-              </small>
-
+              <strong>${escapeHTML(product.name)}</strong>
+              <small>${escapeHTML(product.category)} · ${money(product.price)}</small>
+              <small>Stock: ${product.stock}</small>
             </div>
 
           </div>
 
           <div class="admin-actions">
-
             <button
               class="btn-soft"
               type="button"
@@ -2579,71 +2215,41 @@ function renderAdminProducts() {
             >
               Delete
             </button>
-
           </div>
 
         </div>
       `).join("")
-    : `
-      <div class="empty-state">
-        No products found.
-      </div>
-    `;
+    : '<div class="empty-state">No products found.</div>';
 
-  $("adminProducts").querySelectorAll(
-    "[data-edit-product]"
-  ).forEach(button => {
+  $("adminProducts").querySelectorAll("[data-edit-product]").forEach(button => {
     button.addEventListener("click", () => {
-      openProductModal(
-        Number(button.dataset.editProduct)
-      );
+      openProductModal(Number(button.dataset.editProduct));
     });
   });
 
-  $("adminProducts").querySelectorAll(
-    "[data-delete-product]"
-  ).forEach(button => {
+  $("adminProducts").querySelectorAll("[data-delete-product]").forEach(button => {
     button.addEventListener("click", () => {
-      deleteProduct(
-        Number(button.dataset.deleteProduct)
-      );
+      deleteProduct(Number(button.dataset.deleteProduct));
     });
   });
 }
 
 if ($("adminProductSearch")) {
-  $("adminProductSearch").addEventListener(
-    "input",
-    renderAdminProducts
-  );
+  $("adminProductSearch").addEventListener("input", renderAdminProducts);
 }
-
-/* Delete product and remove it from all carts. */
 
 function deleteProduct(id) {
   if (currentRole !== "admin") return;
 
-  const product = products.find(
-    item => Number(item.id) === Number(id)
-  );
-
+  const product = products.find(item => Number(item.id) === Number(id));
   if (!product) return;
 
-  if (!confirm(`Delete ${product.name}?`)) {
-    return;
-  }
+  if (!confirm(`Delete ${product.name}?`)) return;
 
-  const previousProducts = products.map(
-    item => ({ ...item })
-  );
+  const previousProducts = products.map(item => ({ ...item }));
+  const previousCarts = JSON.parse(JSON.stringify(carts));
 
-  const previousCarts = JSON.parse(
-    JSON.stringify(carts)
-  );
-
-  products = products.filter(
-    item => Number(item.id) !== Number(id)
-  );
+  products = products.filter(item => Number(item.id) !== Number(id));
 
   Object.keys(carts).forEach(userId => {
     carts[userId] = carts[userId].filter(
@@ -2657,6 +2263,8 @@ function deleteProduct(id) {
     return;
   }
 
+  selectedCartProducts.delete(String(id));
+
   renderAdminProducts();
   renderInventory();
   renderDashboard();
@@ -2664,7 +2272,6 @@ function deleteProduct(id) {
   notify("Product deleted.");
 }
 
-/* END OF PART 3 */
 /* =========================================================
    16. INVENTORY MANAGEMENT
 ========================================================= */
@@ -2702,9 +2309,7 @@ function renderInventory() {
     </div>
 
     <div class="table-wrap">
-
       <table>
-
         <thead>
           <tr>
             <th>Product</th>
@@ -2717,20 +2322,14 @@ function renderInventory() {
         </thead>
 
         <tbody>
-
           ${products.map(product => `
             <tr>
-
               <td>${escapeHTML(product.name)}</td>
-
               <td>${escapeHTML(product.category)}</td>
-
               <td>${money(product.price)}</td>
-
               <td>${Number(product.stock)}</td>
 
               <td>
-
                 <span class="status ${
                   product.stock === 0
                     ? "cancelled"
@@ -2738,7 +2337,6 @@ function renderInventory() {
                       ? ""
                       : "delivered"
                 }">
-
                   ${
                     product.stock === 0
                       ? "Out of Stock"
@@ -2746,13 +2344,10 @@ function renderInventory() {
                         ? "Low Stock"
                         : "In Stock"
                   }
-
                 </span>
-
               </td>
 
               <td>
-
                 <button
                   class="btn-soft"
                   type="button"
@@ -2760,26 +2355,17 @@ function renderInventory() {
                 >
                   Update
                 </button>
-
               </td>
-
             </tr>
           `).join("")}
-
         </tbody>
-
       </table>
-
     </div>
   `;
 
-  $("inventoryList").querySelectorAll(
-    "[data-inventory-edit]"
-  ).forEach(button => {
+  $("inventoryList").querySelectorAll("[data-inventory-edit]").forEach(button => {
     button.addEventListener("click", () => {
-      openProductModal(
-        Number(button.dataset.inventoryEdit)
-      );
+      openProductModal(Number(button.dataset.inventoryEdit));
     });
   });
 }
@@ -2791,16 +2377,12 @@ function renderInventory() {
 function renderAdminUsers() {
   if (currentRole !== "admin") return;
 
-  const customers = users.filter(
-    user => user.role === "customer"
-  );
+  const customers = users.filter(user => user.role === "customer");
 
   $("adminUsers").innerHTML = customers.length
     ? `
       <div class="table-wrap">
-
         <table>
-
           <thead>
             <tr>
               <th>Name</th>
@@ -2813,32 +2395,15 @@ function renderAdminUsers() {
           </thead>
 
           <tbody>
-
             ${customers.map(user => `
               <tr>
+                <td>${escapeHTML(user.fullName)}</td>
+                <td>${escapeHTML(user.username)}</td>
+                <td>${escapeHTML(user.phone || "—")}</td>
+                <td>${escapeHTML(formatDate(user.createdAt))}</td>
+                <td>${user.active === false ? "Disabled" : "Active"}</td>
 
                 <td>
-                  ${escapeHTML(user.fullName)}
-                </td>
-
-                <td>
-                  ${escapeHTML(user.username)}
-                </td>
-
-                <td>
-                  ${escapeHTML(user.phone || "—")}
-                </td>
-
-                <td>
-                  ${escapeHTML(formatDate(user.createdAt))}
-                </td>
-
-                <td>
-                  ${user.active === false ? "Disabled" : "Active"}
-                </td>
-
-                <td>
-
                   <button
                     class="btn-soft"
                     type="button"
@@ -2854,41 +2419,24 @@ function renderAdminUsers() {
                   >
                     Delete
                   </button>
-
                 </td>
-
               </tr>
             `).join("")}
-
           </tbody>
-
         </table>
-
       </div>
     `
-    : `
-      <div class="empty-state">
-        No customer accounts found.
-      </div>
-    `;
+    : '<div class="empty-state">No customer accounts found.</div>';
 
-  $("adminUsers").querySelectorAll(
-    "[data-toggle-user]"
-  ).forEach(button => {
+  $("adminUsers").querySelectorAll("[data-toggle-user]").forEach(button => {
     button.addEventListener("click", () => {
-      toggleUser(
-        Number(button.dataset.toggleUser)
-      );
+      toggleUser(Number(button.dataset.toggleUser));
     });
   });
 
-  $("adminUsers").querySelectorAll(
-    "[data-delete-user]"
-  ).forEach(button => {
+  $("adminUsers").querySelectorAll("[data-delete-user]").forEach(button => {
     button.addEventListener("click", () => {
-      deleteUser(
-        Number(button.dataset.deleteUser)
-      );
+      deleteUser(Number(button.dataset.deleteUser));
     });
   });
 }
@@ -2904,7 +2452,6 @@ function toggleUser(id) {
   if (!user) return;
 
   const oldStatus = user.active;
-
   user.active = user.active === false;
 
   if (!save(DB.users, users)) {
@@ -2913,12 +2460,7 @@ function toggleUser(id) {
   }
 
   renderAdminUsers();
-
-  notify(
-    user.active
-      ? "Account enabled."
-      : "Account disabled."
-  );
+  notify(user.active ? "Account enabled." : "Account disabled.");
 }
 
 function deleteUser(id) {
@@ -2932,7 +2474,7 @@ function deleteUser(id) {
   if (!user) return;
 
   const hasOrders = orders.some(order =>
-    order.customerId === id &&
+    Number(order.customerId) === Number(id) &&
     order.status !== "Cancelled"
   );
 
@@ -2941,24 +2483,15 @@ function deleteUser(id) {
       "Cannot delete a customer with active or completed orders.",
       "error"
     );
-
     return;
   }
 
-  if (!confirm(`Delete ${user.fullName}'s account?`)) {
-    return;
-  }
+  if (!confirm(`Delete ${user.fullName}'s account?`)) return;
 
   const previousUsers = [...users];
+  const previousCarts = JSON.parse(JSON.stringify(carts));
 
-  const previousCarts = JSON.parse(
-    JSON.stringify(carts)
-  );
-
-  users = users.filter(
-    item => Number(item.id) !== Number(id)
-  );
-
+  users = users.filter(item => Number(item.id) !== Number(id));
   delete carts[id];
 
   if (!saveAll()) {
@@ -2982,22 +2515,11 @@ function renderDashboard() {
 
   const revenue = orders
     .filter(order => order.status === "Completed")
-    .reduce(
-      (sum, order) => sum + Number(order.total || 0),
-      0
-    );
+    .reduce((sum, order) => sum + Number(order.total || 0), 0);
 
-  const pending = orders.filter(
-    order => order.status === "Pending"
-  ).length;
-
-  const completed = orders.filter(
-    order => order.status === "Completed"
-  ).length;
-
-  const customers = users.filter(
-    user => user.role === "customer"
-  ).length;
+  const pending = orders.filter(order => order.status === "Pending").length;
+  const completed = orders.filter(order => order.status === "Completed").length;
+  const customers = users.filter(user => user.role === "customer").length;
 
   $("dashboardStats").innerHTML = `
     <div class="stat-card">
@@ -3036,9 +2558,7 @@ function renderDashboard() {
   $("recentOrders").innerHTML = recent.length
     ? `
       <div class="table-wrap">
-
         <table>
-
           <thead>
             <tr>
               <th>Order ID</th>
@@ -3050,42 +2570,20 @@ function renderDashboard() {
           </thead>
 
           <tbody>
-
             ${recent.map(order => `
               <tr>
-
                 <td>PV-${order.id}</td>
-
-                <td>
-                  ${escapeHTML(order.customerName)}
-                </td>
-
-                <td>
-                  ${escapeHTML(formatDate(order.date))}
-                </td>
-
-                <td>
-                  ${money(order.total)}
-                </td>
-
-                <td>
-                  ${escapeHTML(order.status)}
-                </td>
-
+                <td>${escapeHTML(order.customerName)}</td>
+                <td>${escapeHTML(formatDate(order.date))}</td>
+                <td>${money(order.total)}</td>
+                <td>${escapeHTML(order.status)}</td>
               </tr>
             `).join("")}
-
           </tbody>
-
         </table>
-
       </div>
     `
-    : `
-      <div class="empty-state">
-        No recent orders.
-      </div>
-    `;
+    : '<div class="empty-state">No recent orders.</div>';
 }
 
 /* =========================================================
@@ -3095,9 +2593,7 @@ function renderDashboard() {
 function loadSettings() {
   if (currentRole !== "admin") return;
 
-  $("settingsUsername").value =
-    currentUser.username;
-
+  $("settingsUsername").value = currentUser.username;
   $("settingsPassword").value = "";
   $("settingsConfirm").value = "";
   $("settingsMessage").textContent = "";
@@ -3109,29 +2605,20 @@ if ($("settingsForm")) {
 
     if (currentRole !== "admin") return;
 
-    const username =
-      $("settingsUsername").value.trim();
-
-    const password =
-      $("settingsPassword").value;
-
-    const confirmPassword =
-      $("settingsConfirm").value;
+    const username = $("settingsUsername").value.trim();
+    const password = $("settingsPassword").value;
+    const confirmPassword = $("settingsConfirm").value;
 
     if (!/^[a-zA-Z0-9_.-]{3,30}$/.test(username)) {
-      $("settingsMessage").textContent =
-        "Invalid username.";
-
+      $("settingsMessage").textContent = "Invalid username.";
       return;
     }
 
     if (users.some(user =>
-      user.id !== currentUser.id &&
+      Number(user.id) !== Number(currentUser.id) &&
       user.username.toLowerCase() === username.toLowerCase()
     )) {
-      $("settingsMessage").textContent =
-        "Username is already in use.";
-
+      $("settingsMessage").textContent = "Username is already in use.";
       return;
     }
 
@@ -3139,14 +2626,11 @@ if ($("settingsForm")) {
       if (password.length < 6) {
         $("settingsMessage").textContent =
           "Password must contain at least 6 characters.";
-
         return;
       }
 
       if (password !== confirmPassword) {
-        $("settingsMessage").textContent =
-          "Passwords do not match.";
-
+        $("settingsMessage").textContent = "Passwords do not match.";
         return;
       }
     }
@@ -3156,9 +2640,7 @@ if ($("settingsForm")) {
 
     currentUser.username = username;
 
-    if (password) {
-      currentUser.password = password;
-    }
+    if (password) currentUser.password = password;
 
     if (!save(DB.users, users)) {
       currentUser.username = oldUsername;
@@ -3188,32 +2670,21 @@ function printReceipt() {
     return;
   }
 
-  const printWindow = window.open(
-    "",
-    "_blank",
-    "width=850,height=750"
-  );
+  const printWindow = window.open("", "_blank", "width=850,height=750");
 
   if (!printWindow) {
-    notify(
-      "Allow pop-ups to print your receipt.",
-      "error"
-    );
-
+    notify("Allow pop-ups to print your receipt.", "error");
     return;
   }
 
   printWindow.document.write(`
     <!DOCTYPE html>
     <html lang="en">
-
     <head>
       <meta charset="UTF-8">
-
       <title>Petal & Vine Receipt</title>
 
       <style>
-
         body {
           padding: 25px;
           color: #382b32;
@@ -3229,8 +2700,7 @@ function printReceipt() {
           border-collapse: collapse;
         }
 
-        th,
-        td {
+        th, td {
           padding: 10px;
           border-bottom: 1px solid #eee;
           text-align: left;
@@ -3256,12 +2726,10 @@ function printReceipt() {
             padding: 0;
           }
         }
-
       </style>
     </head>
 
     <body>
-
       ${content.innerHTML}
 
       <script>
@@ -3269,9 +2737,7 @@ function printReceipt() {
           window.print();
         };
       <\/script>
-
     </body>
-
     </html>
   `);
 
@@ -3309,9 +2775,10 @@ function initializeApplication() {
   restoreSession();
 }
 
-document.addEventListener(
-  "DOMContentLoaded",
-  initializeApplication
-);
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initializeApplication);
+} else {
+  initializeApplication();
+}
 
 /* END OF PETAL & VINE JAVASCRIPT */
