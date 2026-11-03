@@ -32,7 +32,7 @@ let currentUser = null;
 let currentRole = null;
 let currentPage = "";
 let toastTimer = null;
-let selectedProduct = null;
+let selectedProduct = new Set();
 
 let nextProductId = 1;
 let nextOrderId = 1;
