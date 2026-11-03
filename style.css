@@ -15,7 +15,7 @@
 --shadow: 0 12px 35px rgba(74, 37, 55, .08);
 }
 
-- { box-sizing: border-box; }
+* { box-sizing: border-box; }
   body { margin: 0; background: var(--cream); color: var(--text); font-family: 'DM Sans', sans-serif; }
   button, input, textarea, select { font: inherit; }
   button { cursor: pointer; }
