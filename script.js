@@ -1,105 +1,38 @@
-
 "use strict";
 
-/* =========================================================
-   PETAL & VINE FLOWER BOUTIQUE
-   COMPLETE CONNECTED JAVASCRIPT
-   Storage: Browser LocalStorage
-   Database: Not Required
-   Features: Customer, Admin, Cart, FIFO, Orders, Receipts
-========================================================= */
-
-
-/* =========================================================
-   1. STORAGE AND CONFIGURATION
-========================================================= */
+/* PETAL & VINE FLOWER BOUTIQUE
+   Separate front-end files; data is stored in this browser only.
+   Demo only: localStorage is not secure authentication or a shared database. */
 
 const DB = {
-  users: "pv_users",
-  products: "pv_products",
-  orders: "pv_orders",
-  carts: "pv_carts",
-  session: "pv_session",
-  queue: "pv_order_queue",
+  users: "pv_users", products: "pv_products", orders: "pv_orders",
+  carts: "pv_carts", session: "pv_session", queue: "pv_order_queue",
   counters: "pv_counters"
 };
 
 const $ = id => document.getElementById(id);
+const money = value => "₱" + Number(value || 0).toLocaleString("en-PH", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2
+});
+const esc = value => String(value ?? "").replace(/[&<>"']/g, c => ({
+  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;"
+}[c]));
+const dateText = value => {
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? "—" : d.toLocaleString("en-PH");
+};
+const validPhone = value => /^[0-9+\-\s()]{7,20}$/.test(value.trim());
 
-let users = [];
-let products = [];
-let orders = [];
-let carts = {};
-let currentUser = null;
-let currentRole = null;
-let currentPage = "";
-let toastTimer = null;
-let selectedProduct = null;
-let nextProductId = 1;
-let nextOrderId = 1;
-
-
-/* =========================================================
-   2. HELPER FUNCTIONS
-========================================================= */
-
-function escapeHTML(value) {
-  return String(value ?? "").replace(/[&<>"']/g, char => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#039;"
-  })[char]);
-}
-
-function money(amount) {
-  return "₱" + Number(amount || 0).toLocaleString("en-PH", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  });
-}
-
-function formatDate(date) {
-  if (!date) return "—";
-
-  const parsed = new Date(date);
-
-  return Number.isNaN(parsed.getTime())
-    ? "—"
-    : parsed.toLocaleString("en-PH");
-}
-
-function notify(message, type = "success") {
-  const toast = $("toast");
-
-  if (!toast) return;
-
-  clearTimeout(toastTimer);
-
-  toast.textContent = message;
-  toast.classList.remove("hidden", "show", "error");
-
-  if (type === "error") toast.classList.add("error");
-
-  requestAnimationFrame(() => toast.classList.add("show"));
-
-  toastTimer = setTimeout(() => {
-    toast.classList.remove("show");
-    setTimeout(() => toast.classList.add("hidden"), 300);
-  }, 2800);
-}
-
-function validPhone(phone) {
-  return /^[0-9+\-\s()]{7,20}$/.test(phone.trim());
-}
+let users = [], products = [], orders = [], carts = {}, currentUser = null, currentRole = null;
+let nextProductId = 1, nextOrderId = 1, selectedProduct = null, toastTimer = null;
 
 function read(key, fallback) {
   try {
-    const value = localStorage.getItem(key);
-    return value === null ? fallback : JSON.parse(value);
+    const raw = localStorage.getItem(key);
+    return raw === null ? fallback : JSON.parse(raw);
   } catch (error) {
-    console.error("Storage read error:", error);
+    console.error("Storage read error", error);
     return fallback;
   }
 }
@@ -109,10 +42,28 @@ function save(key, value) {
     localStorage.setItem(key, JSON.stringify(value));
     return true;
   } catch (error) {
-    console.error("Storage save error:", error);
+    console.error("Storage save error", error);
     notify("Unable to save. Browser storage may be full.", "error");
     return false;
   }
+}
+
+function notify(message, type = "success") {
+  const toast = $("toast");
+  if (!toast) return;
+
+  clearTimeout(toastTimer);
+  toast.textContent = message;
+  toast.classList.remove("hidden", "show", "error");
+
+  if (type === "error") toast.classList.add("error");
+
+  requestAnimationFrame(() => toast.classList.add("show"));
+
+  toastTimer = setTimeout(() => {
+    toast.classList.remove("show");
+    setTimeout(() => toast.classList.add("hidden"), 250);
+  }, 2600);
 }
 
 function saveAll() {
@@ -126,7 +77,6 @@ function saveAll() {
       product: nextProductId,
       order: nextOrderId
     }));
-
     return true;
   } catch (error) {
     console.error(error);
@@ -135,35 +85,7 @@ function saveAll() {
   }
 }
 
-function getCart() {
-  if (!currentUser) return [];
-
-  if (!Array.isArray(carts[currentUser.id])) {
-    carts[currentUser.id] = [];
-  }
-
-  return carts[currentUser.id];
-}
-
-function setCart(cart) {
-  if (!currentUser) return false;
-
-  const oldCart = carts[currentUser.id];
-  carts[currentUser.id] = cart;
-
-  if (!save(DB.carts, carts)) {
-    carts[currentUser.id] = oldCart || [];
-    return false;
-  }
-
-  updateCartCount();
-  return true;
-}
-
-
-/* =========================================================
-   3. FIFO QUEUE DATA STRUCTURE
-========================================================= */
+/* FIFO QUEUE */
 
 class OrderQueue {
   constructor(items = []) {
@@ -171,9 +93,7 @@ class OrderQueue {
   }
 
   enqueue(id) {
-    if (!this.items.includes(id)) {
-      this.items.push(id);
-    }
+    if (!this.items.includes(id)) this.items.push(id);
   }
 
   dequeue() {
@@ -185,7 +105,7 @@ class OrderQueue {
   }
 
   remove(id) {
-    this.items = this.items.filter(item => item !== id);
+    this.items = this.items.filter(value => value !== id);
   }
 
   toArray() {
@@ -199,61 +119,27 @@ class OrderQueue {
 
 let orderQueue = new OrderQueue();
 
-
-/* =========================================================
-   4. DEFAULT PRODUCTS AND ADMIN ACCOUNT
-========================================================= */
+/* DEFAULT PRODUCTS */
 
 const defaultProducts = [
-  {
-    name: "Classic Red Roses",
-    category: "Rose",
-    description: "A beautiful bouquet of romantic red roses.",
-    price: 850,
-    stock: 20,
-    image: "🌹"
-  },
-  {
-    name: "Pink Rose Bouquet",
-    category: "Rose",
-    description: "Soft pink roses for thoughtful occasions.",
-    price: 950,
-    stock: 15,
-    image: "🌸"
-  },
-  {
-    name: "Golden Sunflowers",
-    category: "Sunflower",
-    description: "Bright sunflowers to bring happiness.",
-    price: 750,
-    stock: 18,
-    image: "🌻"
-  },
-  {
-    name: "Purple Tulips",
-    category: "Tulip",
-    description: "Elegant purple tulips for special moments.",
-    price: 1100,
-    stock: 12,
-    image: "🌷"
-  },
-  {
-    name: "Mixed Flower Bouquet",
-    category: "Mixed Bouquet",
-    description: "A colorful arrangement of seasonal flowers.",
-    price: 1250,
-    stock: 10,
-    image: "💐"
-  },
-  {
-    name: "White Lily Arrangement",
-    category: "Other",
-    description: "Elegant white lilies with a graceful finish.",
-    price: 980,
-    stock: 14,
-    image: "🪷"
-  }
+  { name: "Classic Red Roses", category: "Rose", description: "A beautiful bouquet of romantic red roses.", price: 850, stock: 20, image: "🌹" },
+  { name: "Pink Rose Bouquet", category: "Rose", description: "Soft pink roses for thoughtful occasions.", price: 950, stock: 15, image: "🌸" },
+  { name: "Golden Sunflowers", category: "Sunflower", description: "Bright sunflowers to bring happiness.", price: 750, stock: 18, image: "🌻" },
+  { name: "Purple Tulips", category: "Tulip", description: "Elegant purple tulips for special moments.", price: 1100, stock: 12, image: "🌷" },
+  { name: "Mixed Flower Bouquet", category: "Mixed Bouquet", description: "A colorful arrangement of seasonal flowers.", price: 1250, stock: 10, image: "💐" },
+  { name: "White Lily Arrangement", category: "Other", description: "Elegant white lilies with a graceful finish.", price: 980, stock: 14, image: "🪷" },
+  { name: "Pastel Garden Bouquet", category: "Mixed Bouquet", description: "A soft blend of pastel blooms for thoughtful celebrations.", price: 1350, stock: 9, image: "💐" },
+  { name: "White Rose Bouquet", category: "Rose", description: "Classic white roses for sincere and graceful gestures.", price: 1050, stock: 11, image: "🤍" },
+  { name: "Peach Rose Bouquet", category: "Rose", description: "Warm peach roses for birthdays and heartfelt gifts.", price: 990, stock: 13, image: "🌹" },
+  { name: "Yellow Tulip Bouquet", category: "Tulip", description: "Cheerful yellow tulips to brighten someone's day.", price: 1150, stock: 8, image: "🌷" },
+  { name: "Pink Tulip Bouquet", category: "Tulip", description: "Fresh pink tulips arranged with a delicate finish.", price: 1180, stock: 10, image: "🌷" },
+  { name: "Sunflower Delight", category: "Sunflower", description: "A radiant sunflower arrangement full of warmth.", price: 890, stock: 16, image: "🌻" },
+  { name: "Blush Carnation Bouquet", category: "Other", description: "Soft carnations arranged for appreciation and care.", price: 780, stock: 17, image: "🌸" },
+  { name: "Premium Mixed Roses", category: "Mixed Bouquet", description: "A premium mix of roses in complementary colors.", price: 1480, stock: 7, image: "💐" },
+  { name: "Seasonal Floral Basket", category: "Mixed Bouquet", description: "A charming basket of seasonal flowers and greenery.", price: 1650, stock: 6, image: "🧺" }
 ];
+
+/* INITIALIZATION AND STORAGE */
 
 function initializeData() {
   users = read(DB.users, []);
@@ -267,44 +153,52 @@ function initializeData() {
   if (!Array.isArray(users)) users = [];
   if (!Array.isArray(products)) products = [];
   if (!Array.isArray(orders)) orders = [];
-  if (!carts || typeof carts !== "object" || Array.isArray(carts)) carts = {};
 
-  if (!products.length) {
-    products = defaultProducts.map((product, index) => ({
-      ...product,
-      id: index + 1
-    }));
+  if (!carts || typeof carts !== "object" || Array.isArray(carts)) {
+    carts = {};
   }
 
-  users = users.map(user => ({
-    ...user,
-    active: user.active !== false,
-    role: user.role || "customer"
+  if (!products.length) {
+    products = defaultProducts.map((p, i) => ({ ...p, id: i + 1 }));
+  }
+
+  users = users.map(u => ({
+    ...u,
+    active: u.active !== false,
+    role: u.role || "customer"
   }));
 
-  orders = orders.map(order => ({
-    ...order,
-    items: Array.isArray(order.items) ? order.items : [],
-    status: order.status || "Pending"
+  products = products.map(p => ({
+    ...p,
+    id: Number(p.id),
+    price: Number(p.price) || 0,
+    stock: Math.max(0, Number(p.stock) || 0)
+  }));
+
+  orders = orders.map(o => ({
+    ...o,
+    id: Number(o.id),
+    items: Array.isArray(o.items) ? o.items : [],
+    status: o.status || "Pending"
   }));
 
   nextProductId = Math.max(
     Number(counters.product) || 1,
-    ...products.map(product => Number(product.id) + 1),
+    ...products.map(p => Number(p.id) + 1),
     1
   );
 
   nextOrderId = Math.max(
     Number(counters.order) || 1,
-    ...orders.map(order => Number(order.id) + 1),
+    ...orders.map(o => Number(o.id) + 1),
     1
   );
 
-  const hasAdmin = users.some(user => user.role === "admin");
+  if (!users.some(u => u.role === "admin")) {
+    const adminId = Math.max(0, ...users.map(u => Number(u.id) || 0)) + 1;
 
-  if (!hasAdmin) {
     users.push({
-      id: 1,
+      id: adminId,
       fullName: "Petal & Vine Administrator",
       username: "admin",
       password: "Admin123",
@@ -316,25 +210,57 @@ function initializeData() {
     });
   }
 
-  // Rebuild queue using pending orders only.
-  const pendingIds = orders
-    .filter(order => order.status === "Pending")
-    .map(order => order.id);
+  const pending = orders
+    .filter(o => o.status === "Pending")
+    .map(o => o.id);
 
-  const savedQueue = orderQueue.toArray();
+  const old = orderQueue.toArray();
 
   orderQueue = new OrderQueue([
-    ...savedQueue.filter(id => pendingIds.includes(id)),
-    ...pendingIds.filter(id => !savedQueue.includes(id))
+    ...old.filter(id => pending.includes(id)),
+    ...pending.filter(id => !old.includes(id))
   ]);
 
   saveAll();
 }
 
+/* CUSTOMER CART STORAGE */
 
-/* =========================================================
-   5. AUTHENTICATION - LOGIN AND REGISTRATION
-========================================================= */
+function getCart() {
+  if (!currentUser) return [];
+
+  if (!Array.isArray(carts[currentUser.id])) {
+    carts[currentUser.id] = [];
+  }
+
+  return carts[currentUser.id];
+}
+
+function setCart(value) {
+  if (!currentUser) return false;
+
+  const previous = JSON.stringify(carts[currentUser.id] || []);
+  carts[currentUser.id] = value;
+
+  if (!save(DB.carts, carts)) {
+    carts[currentUser.id] = JSON.parse(previous);
+    return false;
+  }
+
+  updateCartCount();
+  return true;
+}
+
+function updateCartCount() {
+  const count = getCart().reduce(
+    (sum, item) => sum + Number(item.quantity || 0),
+    0
+  );
+
+  if ($("cartCount")) $("cartCount").textContent = count;
+}
+
+/* AUTHENTICATION */
 
 function showLogin() {
   $("loginForm").classList.remove("hidden");
@@ -355,9 +281,9 @@ function showAuth() {
 }
 
 function login(username, password) {
-  const user = users.find(item =>
-    item.username.toLowerCase() === username.toLowerCase() &&
-    item.password === password
+  const user = users.find(u =>
+    u.username.toLowerCase() === username.toLowerCase() &&
+    u.password === password
   );
 
   if (!user) {
@@ -374,19 +300,15 @@ function login(username, password) {
   currentRole = user.role;
   user.lastLogin = new Date().toISOString();
 
-  save(DB.users, users);
-  save(DB.session, { userId: user.id });
+  if (!save(DB.users, users)) return;
+  if (!save(DB.session, { userId: user.id })) return;
 
   openApplication();
 }
 
 $("loginForm").addEventListener("submit", event => {
   event.preventDefault();
-
-  login(
-    $("loginUsername").value.trim(),
-    $("loginPassword").value
-  );
+  login($("loginUsername").value.trim(), $("loginPassword").value);
 });
 
 $("registerForm").addEventListener("submit", event => {
@@ -395,39 +317,32 @@ $("registerForm").addEventListener("submit", event => {
   const fullName = $("registerName").value.trim();
   const username = $("registerUsername").value.trim();
   const password = $("registerPassword").value;
-  const confirm = $("registerConfirm").value;
+  const confirmPassword = $("registerConfirm").value;
 
   if (fullName.length < 2 || fullName.length > 100) {
-    $("registerMessage").textContent = "Enter a valid full name.";
-    return;
+    return $("registerMessage").textContent = "Enter a valid full name.";
   }
 
   if (!/^[a-zA-Z0-9_.-]{3,30}$/.test(username)) {
-    $("registerMessage").textContent =
-      "Username must be 3–30 characters and use letters, numbers, dots, underscores or hyphens.";
-    return;
+    return $("registerMessage").textContent =
+      "Username must be 3–30 characters using letters, numbers, dots, underscores or hyphens.";
   }
 
   if (password.length < 6) {
-    $("registerMessage").textContent =
+    return $("registerMessage").textContent =
       "Password must contain at least 6 characters.";
-    return;
   }
 
-  if (password !== confirm) {
-    $("registerMessage").textContent = "Passwords do not match.";
-    return;
+  if (password !== confirmPassword) {
+    return $("registerMessage").textContent = "Passwords do not match.";
   }
 
-  if (users.some(user =>
-    user.username.toLowerCase() === username.toLowerCase()
-  )) {
-    $("registerMessage").textContent = "Username is already taken.";
-    return;
+  if (users.some(u => u.username.toLowerCase() === username.toLowerCase())) {
+    return $("registerMessage").textContent = "Username is already taken.";
   }
 
   const user = {
-    id: Math.max(0, ...users.map(item => Number(item.id) || 0)) + 1,
+    id: Math.max(0, ...users.map(u => Number(u.id) || 0)) + 1,
     fullName,
     username,
     password,
@@ -447,17 +362,17 @@ $("registerForm").addEventListener("submit", event => {
 
   $("registerForm").reset();
   $("loginUsername").value = username;
-
   showLogin();
-  $("loginMessage").textContent = "Account created successfully. Please log in.";
+  $("loginMessage").textContent =
+    "Account created successfully. Please log in.";
 });
+
+$("showRegister").addEventListener("click", showRegister);
+$("showLogin").addEventListener("click", showLogin);
 
 document.querySelectorAll(".toggle-password").forEach(button => {
   button.addEventListener("click", () => {
     const input = $(button.dataset.target);
-
-    if (!input) return;
-
     input.type = input.type === "password" ? "text" : "password";
     button.textContent = input.type === "password" ? "Show" : "Hide";
   });
@@ -467,10 +382,8 @@ function logout() {
   if (!confirm("Are you sure you want to log out?")) return;
 
   localStorage.removeItem(DB.session);
-
   currentUser = null;
   currentRole = null;
-
   showAuth();
   notify("You have logged out.");
 }
@@ -479,14 +392,8 @@ $("logoutButton").addEventListener("click", logout);
 
 function restoreSession() {
   const session = read(DB.session, null);
-
-  if (!session) {
-    showAuth();
-    return;
-  }
-
-  const user = users.find(item =>
-    item.id === session.userId && item.active !== false
+  const user = session && users.find(u =>
+    u.id === session.userId && u.active !== false
   );
 
   if (!user) {
@@ -497,14 +404,10 @@ function restoreSession() {
 
   currentUser = user;
   currentRole = user.role;
-
   openApplication();
 }
 
-
-/* =========================================================
-   6. MAIN APPLICATION AND NAVIGATION
-========================================================= */
+/* NAVIGATION */
 
 function openApplication() {
   $("authScreen").classList.add("hidden");
@@ -518,21 +421,17 @@ function openApplication() {
   $("customerNav").classList.toggle("hidden", currentRole !== "customer");
   $("adminNav").classList.toggle("hidden", currentRole !== "admin");
 
-  if (currentRole === "admin") {
-    adminPage("dashboard");
-  } else {
-    customerPage("shop");
-  }
+  currentRole === "admin"
+    ? adminPage("dashboard")
+    : customerPage("shop");
 
   updateCartCount();
 }
 
 function goHome() {
-  if (currentRole === "admin") {
-    adminPage("dashboard");
-  } else {
-    customerPage("shop");
-  }
+  currentRole === "admin"
+    ? adminPage("dashboard")
+    : customerPage("shop");
 }
 
 function closeAllPages() {
@@ -553,12 +452,10 @@ function setPage(id, title) {
   closeAllPages();
 
   const page = $(id);
-
   if (!page) return;
 
   page.classList.remove("hidden");
   $("pageTitle").textContent = title;
-  currentPage = id;
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -581,26 +478,14 @@ function customerPage(page, button) {
 
   setPage(...pages[page]);
 
-  switch (page) {
-    case "shop":
-      renderShop();
-      break;
-    case "cart":
-      renderCart();
-      break;
-    case "orders":
-      renderCustomerOrders();
-      break;
-    case "receipts":
-      renderCustomerReceipts();
-      break;
-    case "transactions":
-      renderTransactions();
-      break;
-    case "profile":
-      loadProfile();
-      break;
-  }
+  ({
+    shop: renderShop,
+    cart: renderCart,
+    orders: renderCustomerOrders,
+    receipts: renderCustomerReceipts,
+    transactions: renderTransactions,
+    profile: loadProfile
+  })[page]?.();
 }
 
 function adminPage(page, button) {
@@ -621,268 +506,169 @@ function adminPage(page, button) {
 
   setPage(...pages[page]);
 
-  switch (page) {
-    case "dashboard":
-      renderDashboard();
-      break;
-    case "products":
-      renderAdminProducts();
-      break;
-    case "inventory":
-      renderInventory();
-      break;
-    case "orders":
-      renderAdminOrders();
-      break;
-    case "users":
-      renderAdminUsers();
-      break;
-    case "settings":
-      loadSettings();
-      break;
-  }
+  ({
+    dashboard: renderDashboard,
+    products: renderAdminProducts,
+    inventory: renderInventory,
+    orders: renderAdminOrders,
+    users: renderAdminUsers,
+    settings: loadSettings
+  })[page]?.();
 }
 
 function closeModal(id) {
-  const modal = $(id);
-  if (modal) modal.classList.add("hidden");
+  $(id)?.classList.add("hidden");
 }
 
-window.showLogin = showLogin;
-window.showRegister = showRegister;
 window.goHome = goHome;
 window.customerPage = customerPage;
 window.adminPage = adminPage;
 window.logout = logout;
 window.closeModal = closeModal;
+/* PRODUCT DISPLAY AND SHOP */
 
+function productVisual(product) {
+  const image = String(product.image || "🌸").trim();
 
-/* =========================================================
-   7. PRODUCT IMAGE AND PRODUCT CARD
-========================================================= */
-
-function productVisual(product, className = "product-image") {
-  const image = String(product.image || "").trim();
-
-  if (/^https?:\/\//i.test(image) || /^data:image\//i.test(image)) {
-    return `
-      <div class="${className}">
-        <img src="${escapeHTML(image)}"
-             alt="${escapeHTML(product.name)}"
-             onerror="this.parentElement.textContent='🌸'">
-      </div>
-    `;
-  }
-
-  return `
-    <div class="${className}">
-      ${escapeHTML(image || "🌸")}
-    </div>
-  `;
+  return /^https?:\/\//i.test(image) || /^data:image\//i.test(image)
+    ? `<div class="product-image"><img src="${esc(image)}" alt="${esc(product.name)}" onerror="this.parentElement.textContent='🌸'"></div>`
+    : `<div class="product-image">${esc(image)}</div>`;
 }
 
-function productCard(product) {
-  const outOfStock = product.stock <= 0;
+function productCard(p) {
+  const unavailable = p.stock <= 0;
 
   return `
     <article class="product-card">
-      ${productVisual(product)}
-
+      ${productVisual(p)}
       <div class="product-info">
-        <h3>${escapeHTML(product.name)}</h3>
-
-        <p>${escapeHTML(product.description || product.category)}</p>
-
+        <h3>${esc(p.name)}</h3>
+        <p>${esc(p.description || p.category)}</p>
         <div class="product-meta">
-          <span class="price">${money(product.price)}</span>
-          <span class="stock">
-            ${outOfStock ? "Out of stock" : `${product.stock} available`}
-          </span>
+          <span class="price">${money(p.price)}</span>
+          <span class="stock">${unavailable ? "Out of stock" : `${p.stock} available`}</span>
         </div>
-
         <div class="quantity-row">
-          <input
-            type="number"
-            min="1"
-            max="${product.stock}"
-            value="1"
-            aria-label="Quantity for ${escapeHTML(product.name)}"
-            data-quantity="${product.id}"
-            ${outOfStock ? "disabled" : ""}
-          >
-
-          <button
-            class="btn btn-primary"
-            type="button"
-            data-add-cart="${product.id}"
-            ${outOfStock ? "disabled" : ""}>
-            Add to Cart
-          </button>
+          <input type="number" min="1" max="${p.stock}" value="1"
+            data-quantity="${p.id}" aria-label="Quantity"
+            ${unavailable ? "disabled" : ""}>
+          <button class="btn btn-primary" data-add-cart="${p.id}"
+            ${unavailable ? "disabled" : ""}>Add to Cart</button>
         </div>
-
-        <button
-          class="btn btn-outline full"
-          type="button"
-          data-buy-now="${product.id}"
-          ${outOfStock ? "disabled" : ""}>
-          Buy Now
-        </button>
+        <button class="btn btn-outline full" data-buy-now="${p.id}"
+          ${unavailable ? "disabled" : ""}>Buy Now</button>
       </div>
     </article>
   `;
 }
-
-function bindShopActions(container) {
-  container.querySelectorAll("[data-add-cart]").forEach(button => {
-    button.addEventListener("click", () => {
-      const id = Number(button.dataset.addCart);
-      const quantityInput = container.querySelector(
-        `[data-quantity="${id}"]`
-      );
-
-      addToCart(id, Number(quantityInput?.value || 1));
-    });
-  });
-
-  container.querySelectorAll("[data-buy-now]").forEach(button => {
-    button.addEventListener("click", () => {
-      const id = Number(button.dataset.buyNow);
-      const quantityInput = container.querySelector(
-        `[data-quantity="${id}"]`
-      );
-
-      addToCart(id, Number(quantityInput?.value || 1));
-
-      if (getCart().some(item => item.productId === id)) {
-        customerPage("cart");
-      }
-    });
-  });
-}
-
-
-/* =========================================================
-   8. CUSTOMER SHOP
-========================================================= */
 
 function renderShop() {
   if (currentRole !== "customer") return;
 
   const query = $("productSearch").value.toLowerCase().trim();
 
-  const list = products.filter(product =>
-    product.name.toLowerCase().includes(query) ||
-    product.category.toLowerCase().includes(query) ||
-    (product.description || "").toLowerCase().includes(query)
+  const list = products.filter(p =>
+    [p.name, p.category, p.description].some(value =>
+      String(value || "").toLowerCase().includes(query)
+    )
   );
 
   $("shopProducts").innerHTML = list.length
     ? list.map(productCard).join("")
     : '<div class="empty-state">No flowers found.</div>';
 
-  bindShopActions($("shopProducts"));
+  $("shopProducts").querySelectorAll("[data-add-cart],[data-buy-now]")
+    .forEach(button => {
+      button.addEventListener("click", () => {
+        const id = Number(button.dataset.addCart || button.dataset.buyNow);
+        const qty = Number(
+          $("shopProducts").querySelector(`[data-quantity="${id}"]`)?.value || 1
+        );
+
+        const added = addToCart(id, qty);
+
+        if (button.hasAttribute("data-buy-now") && added) {
+          customerPage("cart");
+        }
+      });
+    });
 }
 
 $("productSearch").addEventListener("input", renderShop);
 
+function addToCart(id, quantity) {
+  if (currentRole !== "customer") return false;
 
-/* =========================================================
-   9. SHOPPING CART
-========================================================= */
+  const p = products.find(item => item.id === id);
 
-function addToCart(productId, quantity) {
-  if (currentRole !== "customer") return;
-
-  const product = products.find(item => item.id === productId);
-
-  if (!product || !Number.isInteger(quantity) || quantity < 1) {
-    return notify("Please enter a valid quantity.", "error");
-  }
-
-  if (quantity > product.stock) {
-    return notify("Not enough stock available.", "error");
+  if (!p || !Number.isInteger(quantity) || quantity < 1) {
+    notify("Please enter a valid quantity.", "error");
+    return false;
   }
 
   const cart = getCart();
-  const existing = cart.find(item => item.productId === productId);
-  const newQuantity = (existing?.quantity || 0) + quantity;
+  const existing = cart.find(item => item.productId === id);
+  const newQty = (existing?.quantity || 0) + quantity;
 
-  if (newQuantity > product.stock) {
-    return notify("Cart quantity exceeds available stock.", "error");
+  if (newQty > p.stock) {
+    notify("Cart quantity exceeds available stock.", "error");
+    return false;
   }
 
-  const updated = [...cart];
+  const updated = cart.map(item => ({ ...item }));
+  const found = updated.find(item => item.productId === id);
 
-  if (existing) {
-    existing.quantity = newQuantity;
+  if (found) {
+    found.quantity = newQty;
   } else {
-    updated.push({ productId, quantity });
+    updated.push({ productId: id, quantity });
   }
 
-  if (!setCart(updated)) return;
+  if (!setCart(updated)) return false;
 
   renderShop();
   notify("Flower added to your cart.");
+  return true;
 }
 
-function updateCartCount() {
-  const count = getCart().reduce(
-    (sum, item) => sum + Number(item.quantity || 0),
-    0
-  );
-
-  if ($("cartCount")) $("cartCount").textContent = count;
-}
-
-function removeFromCart(productId) {
-  const updated = getCart().filter(
-    item => item.productId !== productId
-  );
-
-  if (setCart(updated)) {
+function removeFromCart(id) {
+  if (setCart(getCart().filter(item => item.productId !== id))) {
     renderCart();
     notify("Product removed from cart.");
   }
 }
 
-function changeCartQuantity(productId, quantity) {
-  const product = products.find(item => item.id === productId);
+function changeCartQuantity(id, qty) {
+  const p = products.find(item => item.id === id);
 
-  if (!product || !Number.isInteger(quantity) || quantity < 1) {
+  if (!p || !Number.isInteger(qty) || qty < 1 || qty > p.stock) {
+    notify("Please enter a valid quantity within available stock.", "error");
     renderCart();
     return;
   }
 
-  if (quantity > product.stock) {
-    notify("Quantity exceeds available stock.", "error");
-    renderCart();
-    return;
-  }
+  setCart(getCart().map(item =>
+    item.productId === id ? { ...item, quantity: qty } : item
+  ));
 
-  const updated = getCart().map(item =>
-    item.productId === productId
-      ? { ...item, quantity }
-      : item
-  );
-
-  if (setCart(updated)) renderCart();
+  renderCart();
 }
 
 function renderCart() {
   if (currentRole !== "customer") return;
 
-  const cart = getCart();
+  const items = getCart()
+    .map(item => ({
+      ...item,
+      product: products.find(p => p.id === item.productId)
+    }))
+    .filter(item => item.product);
 
-  const validItems = cart.map(item => ({
-    ...item,
-    product: products.find(product => product.id === item.productId)
-  })).filter(item => item.product);
-
-  if (!validItems.length) {
+  if (!items.length) {
     $("cartContent").innerHTML = `
       <div class="empty-state">
         <strong>Your cart is empty.</strong>
-        Browse our flower collection and add your favorites.
+        <span>Browse our flower collection and add your favorites.</span>
         <button class="btn btn-primary" onclick="customerPage('shop')">
           Continue Shopping
         </button>
@@ -891,7 +677,7 @@ function renderCart() {
     return;
   }
 
-  const total = validItems.reduce(
+  const total = items.reduce(
     (sum, item) => sum + item.product.price * item.quantity,
     0
   );
@@ -899,34 +685,25 @@ function renderCart() {
   $("cartContent").innerHTML = `
     <div class="cart-layout">
       <div>
-        ${validItems.map(item => `
+        ${items.map(item => `
           <div class="cart-item">
             <div class="cart-thumb">
-              ${/^https?:\/\//i.test(item.product.image || "")
-                ? `<img src="${escapeHTML(item.product.image)}" alt="">`
-                : escapeHTML(item.product.image || "🌸")}
+              ${
+                /^https?:\/\//i.test(item.product.image || "") ||
+                /^data:image\//i.test(item.product.image || "")
+                  ? `<img src="${esc(item.product.image)}" alt="${esc(item.product.name)}">`
+                  : esc(item.product.image || "🌸")
+              }
             </div>
-
             <div class="cart-detail">
-              <strong>${escapeHTML(item.product.name)}</strong>
+              <strong>${esc(item.product.name)}</strong>
               <small>${money(item.product.price)} each</small>
             </div>
-
-            <input
-              type="number"
-              min="1"
-              max="${item.product.stock}"
-              value="${item.quantity}"
-              aria-label="Cart quantity"
-              data-cart-quantity="${item.productId}"
-            >
-
+            <input type="number" min="1" max="${item.product.stock}"
+              value="${item.quantity}" data-cart-quantity="${item.productId}"
+              aria-label="Cart quantity">
             <strong>${money(item.product.price * item.quantity)}</strong>
-
-            <button
-              class="btn-danger"
-              type="button"
-              data-remove-cart="${item.productId}">
+            <button class="btn-danger" data-remove-cart="${item.productId}">
               Remove
             </button>
           </div>
@@ -935,21 +712,17 @@ function renderCart() {
 
       <aside class="cart-summary">
         <h2>Order Summary</h2>
-
         <div class="summary-line">
           <span>Items</span>
-          <span>${validItems.reduce((sum, item) => sum + item.quantity, 0)}</span>
+          <span>${items.reduce((sum, item) => sum + item.quantity, 0)}</span>
         </div>
-
         <div class="summary-line summary-total">
           <span>Total</span>
           <span>${money(total)}</span>
         </div>
-
         <button class="btn btn-primary full" id="cartCheckout">
           Proceed to Checkout
         </button>
-
         <button class="btn btn-outline full" onclick="customerPage('shop')">
           Continue Shopping
         </button>
@@ -957,47 +730,47 @@ function renderCart() {
     </div>
   `;
 
-  $("cartContent").querySelectorAll("[data-cart-quantity]").forEach(input => {
-    input.addEventListener("change", () =>
-      changeCartQuantity(
-        Number(input.dataset.cartQuantity),
-        Number(input.value)
-      )
-    );
-  });
+  $("cartContent").querySelectorAll("[data-cart-quantity]")
+    .forEach(input => {
+      input.addEventListener("change", () =>
+        changeCartQuantity(
+          Number(input.dataset.cartQuantity),
+          Number(input.value)
+        )
+      );
+    });
 
-  $("cartContent").querySelectorAll("[data-remove-cart]").forEach(button => {
-    button.addEventListener("click", () =>
-      removeFromCart(Number(button.dataset.removeCart))
-    );
-  });
+  $("cartContent").querySelectorAll("[data-remove-cart]")
+    .forEach(button => {
+      button.addEventListener("click", () =>
+        removeFromCart(Number(button.dataset.removeCart))
+      );
+    });
 
   $("cartCheckout").addEventListener("click", openCheckout);
 }
 
-
-/* =========================================================
-   10. CHECKOUT
-========================================================= */
+/* CHECKOUT AND ORDER PLACEMENT */
 
 function openCheckout() {
-  if (currentRole !== "customer") return;
-
   const cart = getCart();
-
-  if (!cart.length) {
-    return notify("Your cart is empty.", "error");
-  }
 
   const items = cart.map(item => ({
     ...item,
-    product: products.find(product => product.id === item.productId)
+    product: products.find(p => p.id === item.productId)
   }));
+
+  if (!items.length) {
+    return notify("Your cart is empty.", "error");
+  }
 
   if (items.some(item =>
     !item.product || item.quantity > item.product.stock
   )) {
-    return notify("Please update your cart. Some items are unavailable.", "error");
+    return notify(
+      "Some cart items are unavailable. Please update your cart.",
+      "error"
+    );
   }
 
   const total = items.reduce(
@@ -1009,11 +782,10 @@ function openCheckout() {
     <div class="cart-summary">
       ${items.map(item => `
         <div class="summary-line">
-          <span>${escapeHTML(item.product.name)} × ${item.quantity}</span>
+          <span>${esc(item.product.name)} × ${item.quantity}</span>
           <strong>${money(item.product.price * item.quantity)}</strong>
         </div>
       `).join("")}
-
       <div class="summary-line summary-total">
         <span>Total</span>
         <strong>${money(total)}</strong>
@@ -1052,52 +824,49 @@ $("checkoutForm").addEventListener("submit", event => {
   const cart = getCart();
 
   if (!cart.length) {
-    closeModal("checkoutModal");
     return notify("Your cart is empty.", "error");
   }
 
   const items = [];
 
-  for (const cartItem of cart) {
-    const product = products.find(
-      item => item.id === cartItem.productId
-    );
+  for (const ci of cart) {
+    const p = products.find(x => x.id === ci.productId);
 
     if (
-      !product ||
-      !Number.isInteger(cartItem.quantity) ||
-      cartItem.quantity < 1 ||
-      cartItem.quantity > product.stock
+      !p ||
+      !Number.isInteger(ci.quantity) ||
+      ci.quantity < 1 ||
+      ci.quantity > p.stock
     ) {
-      return notify("An item is unavailable or has insufficient stock.", "error");
+      return notify(
+        "An item is unavailable or has insufficient stock.",
+        "error"
+      );
     }
 
     items.push({
-      productId: product.id,
-      name: product.name,
-      image: product.image,
-      price: product.price,
-      quantity: cartItem.quantity,
-      subtotal: product.price * cartItem.quantity
+      productId: p.id,
+      name: p.name,
+      image: p.image,
+      price: p.price,
+      quantity: ci.quantity,
+      subtotal: p.price * ci.quantity
     });
   }
 
-  const total = items.reduce(
-    (sum, item) => sum + item.subtotal,
-    0
-  );
+  const total = items.reduce((sum, item) => sum + item.subtotal, 0);
 
-  const oldProducts = products.map(product => ({ ...product }));
-  const oldOrders = [...orders];
-  const oldQueue = orderQueue.toArray();
-  const oldId = nextOrderId;
+  const snapshot = {
+    products: products.map(p => ({ ...p })),
+    orders: [...orders],
+    queue: orderQueue.toArray(),
+    nextOrderId,
+    carts: JSON.parse(JSON.stringify(carts)),
+    user: { ...currentUser }
+  };
 
   items.forEach(item => {
-    const product = products.find(
-      p => p.id === item.productId
-    );
-
-    product.stock -= item.quantity;
+    products.find(p => p.id === item.productId).stock -= item.quantity;
   });
 
   const order = {
@@ -1116,67 +885,58 @@ $("checkoutForm").addEventListener("submit", event => {
   orders.unshift(order);
   orderQueue.enqueue(order.id);
 
-  const oldName = currentUser.fullName;
-  const oldPhone = currentUser.phone;
-  const oldAddress = currentUser.address;
-
   currentUser.fullName = name;
   currentUser.phone = phone;
   currentUser.address = address;
-
   carts[currentUser.id] = [];
 
   if (!saveAll()) {
-    products = oldProducts;
-    orders = oldOrders;
-    orderQueue = new OrderQueue(oldQueue);
-    nextOrderId = oldId;
-
-    currentUser.fullName = oldName;
-    currentUser.phone = oldPhone;
-    currentUser.address = oldAddress;
-
-    carts[currentUser.id] = cart;
-
-    saveAll();
+    products = snapshot.products;
+    orders = snapshot.orders;
+    orderQueue = new OrderQueue(snapshot.queue);
+    nextOrderId = snapshot.nextOrderId;
+    carts = snapshot.carts;
+    Object.assign(currentUser, snapshot.user);
     return;
   }
 
   $("checkoutForm").reset();
   closeModal("checkoutModal");
 
-  $("headerUser").textContent = currentUser.fullName;
-  $("welcomeText").textContent = currentUser.fullName;
+  $("headerUser").textContent = name;
+  $("welcomeText").textContent = name;
 
-  renderCustomerOrders();
   updateCartCount();
-
   customerPage("orders");
-
   notify(`Order PV-${order.id} placed successfully!`);
 });
-
-
-/* =========================================================
-   11. ORDER DISPLAY AND FIFO PROCESSING
-========================================================= */
+/* ORDERS AND FIFO QUEUE */
 
 function statusClass(status) {
-  if (status === "Completed") return "delivered";
-  if (status === "Cancelled") return "cancelled";
-  return "";
+  return status === "Completed" ? "delivered" :
+    status === "Cancelled" ? "cancelled" : "";
 }
 
 function orderItemsText(order) {
-  return order.items.map(item =>
-    `${escapeHTML(item.name)} × ${item.quantity}`
+  return order.items.map(i =>
+    `${esc(i.name)} × ${Number(i.quantity) || 0}`
   ).join("<br>");
 }
 
+function receiptButton(id, label = "View") {
+  return `<button class="btn-soft" data-view-receipt="${id}">${label}</button>`;
+}
+
+function bindReceiptButtons(container) {
+  container.querySelectorAll("[data-view-receipt]").forEach(button => {
+    button.addEventListener("click", () =>
+      showReceipt(Number(button.dataset.viewReceipt))
+    );
+  });
+}
+
 function renderCustomerOrders() {
-  const list = orders.filter(
-    order => order.customerId === currentUser.id
-  );
+  const list = orders.filter(o => o.customerId === currentUser.id);
 
   if (!list.length) {
     $("customerOrders").innerHTML =
@@ -1198,22 +958,18 @@ function renderCustomerOrders() {
           </tr>
         </thead>
         <tbody>
-          ${list.map(order => `
+          ${list.map(o => `
             <tr>
-              <td>PV-${order.id}</td>
-              <td>${escapeHTML(formatDate(order.date))}</td>
-              <td>${orderItemsText(order)}</td>
-              <td>${money(order.total)}</td>
+              <td>PV-${o.id}</td>
+              <td>${esc(dateText(o.date))}</td>
+              <td>${orderItemsText(o)}</td>
+              <td>${money(o.total)}</td>
               <td>
-                <span class="status ${statusClass(order.status)}">
-                  ${escapeHTML(order.status)}
+                <span class="status ${statusClass(o.status)}">
+                  ${esc(o.status)}
                 </span>
               </td>
-              <td>
-                <button class="btn-soft" data-view-receipt="${order.id}">
-                  View
-                </button>
-              </td>
+              <td>${receiptButton(o.id)}</td>
             </tr>
           `).join("")}
         </tbody>
@@ -1225,8 +981,6 @@ function renderCustomerOrders() {
 }
 
 function renderAdminOrders() {
-  if (currentRole !== "admin") return;
-
   if (!orders.length) {
     $("adminOrders").innerHTML =
       '<div class="empty-state">No orders have been placed.</div>';
@@ -1247,65 +1001,49 @@ function renderAdminOrders() {
             <th>Receipt</th>
           </tr>
         </thead>
-
         <tbody>
-          ${orders.map(order => `
+          ${orders.map(o => `
             <tr>
               <td>
-                <strong>PV-${order.id}</strong>
-                <br>
-                <small>${escapeHTML(formatDate(order.date))}</small>
+                <strong>PV-${o.id}</strong><br>
+                <small>${esc(dateText(o.date))}</small>
               </td>
-
               <td>
-                ${escapeHTML(order.customerName)}
-                <br>
-                <small>${escapeHTML(order.phone)}</small>
+                ${esc(o.customerName)}<br>
+                <small>${esc(o.phone)}</small>
               </td>
-
-              <td>${orderItemsText(order)}</td>
-              <td>${money(order.total)}</td>
-
+              <td>${orderItemsText(o)}</td>
+              <td>${money(o.total)}</td>
               <td>
-                <span class="status ${statusClass(order.status)}">
-                  ${escapeHTML(order.status)}
+                <span class="status ${statusClass(o.status)}">
+                  ${esc(o.status)}
                 </span>
               </td>
-
               <td>
-                <select data-order-status="${order.id}"
-                  aria-label="Order status">
-                  ${["Pending", "Processing", "Completed", "Cancelled"].map(status => `
-                    <option value="${status}"
-                      ${order.status === status ? "selected" : ""}>
-                      ${status}
+                <select data-order-status="${o.id}" aria-label="Order status">
+                  ${["Pending", "Processing", "Completed", "Cancelled"].map(s => `
+                    <option value="${s}" ${o.status === s ? "selected" : ""}>
+                      ${s}
                     </option>
                   `).join("")}
                 </select>
               </td>
-
-              <td>
-                <button class="btn-soft" data-view-receipt="${order.id}">
-                  Receipt
-                </button>
-              </td>
+              <td>${receiptButton(o.id, "Receipt")}</td>
             </tr>
           `).join("")}
         </tbody>
       </table>
     </div>
 
-    <div class="cart-summary" style="margin-top:20px">
+    <div class="cart-summary" style="margin-top:18px">
       <strong>FIFO Pending Order Queue</strong>
       <p class="muted">
-        Oldest pending order: ${
-          orderQueue.peek() === null
-            ? "No pending orders"
-            : "PV-" + orderQueue.peek()
-        }
+        Next order:
+        ${orderQueue.peek() === null ? "No pending orders" : "PV-" + orderQueue.peek()}
       </p>
       <p class="muted">
-        Queue: ${orderQueue.toArray().map(id => "PV-" + id).join(" → ") || "Empty"}
+        Queue:
+        ${orderQueue.toArray().map(id => "PV-" + id).join(" → ") || "Empty"}
       </p>
     </div>
   `;
@@ -1322,25 +1060,19 @@ function renderAdminOrders() {
 function updateOrderStatus(id, newStatus) {
   if (currentRole !== "admin") return;
 
-  const order = orders.find(item => item.id === id);
-
+  const order = orders.find(o => o.id === id);
   if (!order) return;
 
-  const allowed = [
-    "Pending",
-    "Processing",
-    "Completed",
-    "Cancelled"
-  ];
+  const allowed = ["Pending", "Processing", "Completed", "Cancelled"];
 
   if (!allowed.includes(newStatus)) return;
 
   const oldStatus = order.status;
-
   if (oldStatus === newStatus) return;
 
+  // FIFO: only the first pending order can be processed or completed.
   if (
-    newStatus === "Processing" &&
+    ["Processing", "Completed"].includes(newStatus) &&
     oldStatus === "Pending" &&
     orderQueue.peek() !== id
   ) {
@@ -1352,50 +1084,37 @@ function updateOrderStatus(id, newStatus) {
     return;
   }
 
-  const oldProducts = products.map(product => ({ ...product }));
+  const oldProducts = products.map(p => ({ ...p }));
   const oldQueue = orderQueue.toArray();
 
-  // Restore stock when cancelling an order.
+  // Return stock when an order is cancelled.
   if (newStatus === "Cancelled" && oldStatus !== "Cancelled") {
-    order.items.forEach(item => {
-      const product = products.find(
-        p => p.id === item.productId
-      );
-
-      if (product) product.stock += item.quantity;
+    order.items.forEach(i => {
+      const p = products.find(x => x.id === i.productId);
+      if (p) p.stock += i.quantity;
     });
   }
 
-  // Deduct stock again if a cancelled order is reactivated.
+  // Deduct stock again when a cancelled order is reactivated.
   if (oldStatus === "Cancelled" && newStatus !== "Cancelled") {
-    const available = order.items.every(item => {
-      const product = products.find(
-        p => p.id === item.productId
-      );
-
-      return product && product.stock >= item.quantity;
+    const enough = order.items.every(i => {
+      const p = products.find(x => x.id === i.productId);
+      return p && p.stock >= i.quantity;
     });
 
-    if (!available) {
+    if (!enough) {
       notify("Not enough stock to reactivate this order.", "error");
       renderAdminOrders();
       return;
     }
 
-    order.items.forEach(item => {
-      products.find(
-        p => p.id === item.productId
-      ).stock -= item.quantity;
+    order.items.forEach(i => {
+      products.find(x => x.id === i.productId).stock -= i.quantity;
     });
   }
 
-  if (oldStatus === "Pending") {
-    orderQueue.remove(id);
-  }
-
-  if (newStatus === "Pending") {
-    orderQueue.enqueue(id);
-  }
+  if (oldStatus === "Pending") orderQueue.remove(id);
+  if (newStatus === "Pending") orderQueue.enqueue(id);
 
   order.status = newStatus;
 
@@ -1403,33 +1122,19 @@ function updateOrderStatus(id, newStatus) {
     order.status = oldStatus;
     products = oldProducts;
     orderQueue = new OrderQueue(oldQueue);
-    saveAll();
     return;
   }
 
   renderAdminOrders();
   renderDashboard();
   renderInventory();
-
   notify("Order status updated.");
 }
 
-
-/* =========================================================
-   12. RECEIPTS
-========================================================= */
-
-function bindReceiptButtons(container) {
-  container.querySelectorAll("[data-view-receipt]").forEach(button => {
-    button.addEventListener("click", () =>
-      showReceipt(Number(button.dataset.viewReceipt))
-    );
-  });
-}
+/* RECEIPTS AND TRANSACTIONS */
 
 function showReceipt(id) {
-  const order = orders.find(item => item.id === id);
-
+  const order = orders.find(o => o.id === id);
   if (!order) return;
 
   if (
@@ -1448,11 +1153,11 @@ function showReceipt(id) {
       <hr>
 
       <p><strong>Receipt No:</strong> PV-${order.id}</p>
-      <p><strong>Date:</strong> ${escapeHTML(formatDate(order.date))}</p>
-      <p><strong>Customer:</strong> ${escapeHTML(order.customerName)}</p>
-      <p><strong>Phone:</strong> ${escapeHTML(order.phone)}</p>
-      <p><strong>Address:</strong> ${escapeHTML(order.address)}</p>
-      <p><strong>Payment:</strong> ${escapeHTML(order.payment)}</p>
+      <p><strong>Date:</strong> ${esc(dateText(order.date))}</p>
+      <p><strong>Customer:</strong> ${esc(order.customerName)}</p>
+      <p><strong>Phone:</strong> ${esc(order.phone)}</p>
+      <p><strong>Address:</strong> ${esc(order.address)}</p>
+      <p><strong>Payment:</strong> ${esc(order.payment)}</p>
 
       <div class="table-wrap">
         <table>
@@ -1465,12 +1170,12 @@ function showReceipt(id) {
             </tr>
           </thead>
           <tbody>
-            ${order.items.map(item => `
+            ${order.items.map(i => `
               <tr>
-                <td>${escapeHTML(item.name)}</td>
-                <td>${item.quantity}</td>
-                <td>${money(item.price)}</td>
-                <td>${money(item.subtotal)}</td>
+                <td>${esc(i.name)}</td>
+                <td>${i.quantity}</td>
+                <td>${money(i.price)}</td>
+                <td>${money(i.subtotal)}</td>
               </tr>
             `).join("")}
           </tbody>
@@ -1482,7 +1187,7 @@ function showReceipt(id) {
         <strong>${money(order.total)}</strong>
       </div>
 
-      <p><strong>Order Status:</strong> ${escapeHTML(order.status)}</p>
+      <p><strong>Order Status:</strong> ${esc(order.status)}</p>
 
       <div class="receipt-head">
         <p>We appreciate your purchase! 🌷</p>
@@ -1494,9 +1199,7 @@ function showReceipt(id) {
 }
 
 function renderCustomerReceipts() {
-  const list = orders.filter(
-    order => order.customerId === currentUser.id
-  );
+  const list = orders.filter(o => o.customerId === currentUser.id);
 
   $("customerReceipts").innerHTML = list.length
     ? `
@@ -1512,17 +1215,13 @@ function renderCustomerReceipts() {
             </tr>
           </thead>
           <tbody>
-            ${list.map(order => `
+            ${list.map(o => `
               <tr>
-                <td>PV-${order.id}</td>
-                <td>${escapeHTML(formatDate(order.date))}</td>
-                <td>${money(order.total)}</td>
-                <td>${escapeHTML(order.status)}</td>
-                <td>
-                  <button class="btn-soft" data-view-receipt="${order.id}">
-                    View Receipt
-                  </button>
-                </td>
+                <td>PV-${o.id}</td>
+                <td>${esc(dateText(o.date))}</td>
+                <td>${money(o.total)}</td>
+                <td>${esc(o.status)}</td>
+                <td>${receiptButton(o.id, "View Receipt")}</td>
               </tr>
             `).join("")}
           </tbody>
@@ -1534,19 +1233,12 @@ function renderCustomerReceipts() {
   bindReceiptButtons($("customerReceipts"));
 }
 
-
-/* =========================================================
-   13. TRANSACTION HISTORY
-========================================================= */
-
 function renderTransactions() {
-  const list = orders.filter(
-    order => order.customerId === currentUser.id
-  );
+  const list = orders.filter(o => o.customerId === currentUser.id);
 
-  const totalSpent = list
-    .filter(order => order.status !== "Cancelled")
-    .reduce((sum, order) => sum + Number(order.total), 0);
+  const spent = list
+    .filter(o => o.status !== "Cancelled")
+    .reduce((sum, o) => sum + Number(o.total || 0), 0);
 
   $("customerTransactions").innerHTML = `
     <div class="stats-grid">
@@ -1554,10 +1246,9 @@ function renderTransactions() {
         <span>Total Orders</span>
         <strong>${list.length}</strong>
       </div>
-
       <div class="stat-card">
         <span>Total Purchases (excluding cancelled)</span>
-        <strong>${money(totalSpent)}</strong>
+        <strong>${money(spent)}</strong>
       </div>
     </div>
 
@@ -1574,13 +1265,13 @@ function renderTransactions() {
             </tr>
           </thead>
           <tbody>
-            ${list.map(order => `
+            ${list.map(o => `
               <tr>
-                <td>PV-${order.id}</td>
-                <td>${escapeHTML(formatDate(order.date))}</td>
-                <td>${escapeHTML(order.payment)}</td>
-                <td>${money(order.total)}</td>
-                <td>${escapeHTML(order.status)}</td>
+                <td>PV-${o.id}</td>
+                <td>${esc(dateText(o.date))}</td>
+                <td>${esc(o.payment)}</td>
+                <td>${money(o.total)}</td>
+                <td>${esc(o.status)}</td>
               </tr>
             `).join("")}
           </tbody>
@@ -1590,10 +1281,7 @@ function renderTransactions() {
   `;
 }
 
-
-/* =========================================================
-   14. CUSTOMER PROFILE
-========================================================= */
+/* CUSTOMER PROFILE */
 
 function loadProfile() {
   $("profileName").value = currentUser.fullName || "";
@@ -1622,9 +1310,9 @@ $("profileForm").addEventListener("submit", event => {
     return notify("Invalid username.", "error");
   }
 
-  if (users.some(user =>
-    user.id !== currentUser.id &&
-    user.username.toLowerCase() === username.toLowerCase()
+  if (users.some(u =>
+    u.id !== currentUser.id &&
+    u.username.toLowerCase() === username.toLowerCase()
   )) {
     return notify("Username is already taken.", "error");
   }
@@ -1637,17 +1325,19 @@ $("profileForm").addEventListener("submit", event => {
     return notify("Password must have at least 6 characters.", "error");
   }
 
-  const oldUser = { ...currentUser };
+  const old = { ...currentUser };
 
-  currentUser.fullName = name;
-  currentUser.username = username;
-  currentUser.phone = phone;
-  currentUser.address = address;
+  Object.assign(currentUser, {
+    fullName: name,
+    username,
+    phone,
+    address
+  });
 
   if (password) currentUser.password = password;
 
   if (!save(DB.users, users)) {
-    Object.assign(currentUser, oldUser);
+    Object.assign(currentUser, old);
     return;
   }
 
@@ -1658,10 +1348,7 @@ $("profileForm").addEventListener("submit", event => {
   notify("Profile updated successfully.");
 });
 
-
-/* =========================================================
-   15. ADMIN PRODUCT MANAGEMENT
-========================================================= */
+/* ADMIN PRODUCT MANAGEMENT */
 
 function openProductModal(id = null) {
   if (currentRole !== "admin") return;
@@ -1673,30 +1360,27 @@ function openProductModal(id = null) {
   selectedProduct = null;
 
   if (id !== null) {
-    const product = products.find(item => item.id === id);
+    const p = products.find(x => x.id === id);
+    if (!p) return;
 
-    if (!product) return;
+    selectedProduct = { ...p };
 
-    selectedProduct = product;
-    $("productId").value = product.id;
-    $("productName").value = product.name;
-    $("productCategory").value = product.category;
-    $("productDescription").value = product.description || "";
-    $("productPrice").value = product.price;
-    $("productStock").value = product.stock;
+    $("productId").value = p.id;
+    $("productName").value = p.name;
+    $("productCategory").value = p.category;
+    $("productDescription").value = p.description || "";
+    $("productPrice").value = p.price;
+    $("productStock").value = p.stock;
 
-    $("productImage").value =
-      product.image && !/^data:image\//i.test(product.image)
-        ? product.image
-        : "";
-
-    if (/^https?:\/\//i.test(product.image || "") ||
-        /^data:image\//i.test(product.image || "")) {
-      $("productImagePreview").src = product.image;
+    if (/^https?:\/\//i.test(p.image || "")) {
+      $("productImage").value = p.image;
+      $("productImagePreview").src = p.image;
       $("productImagePreview").classList.remove("hidden");
-    } else if (product.image) {
-      $("productImagePreview").alt = product.image;
-      $("productImagePreview").classList.add("hidden");
+    } else if (/^data:image\//i.test(p.image || "")) {
+      $("productImagePreview").src = p.image;
+      $("productImagePreview").classList.remove("hidden");
+    } else {
+      $("productImage").value = p.image || "";
     }
 
     $("productModalTitle").textContent = "Edit Product";
@@ -1707,9 +1391,14 @@ function openProductModal(id = null) {
 
 window.openProductModal = openProductModal;
 
+$("productImage").addEventListener("input", () => {
+  if (selectedProduct?.uploadedImage) {
+    delete selectedProduct.uploadedImage;
+  }
+});
+
 $("productImageFile").addEventListener("change", () => {
   const file = $("productImageFile").files[0];
-
   if (!file) return;
 
   if (!file.type.startsWith("image/")) {
@@ -1727,12 +1416,13 @@ $("productImageFile").addEventListener("change", () => {
   const reader = new FileReader();
 
   reader.onload = () => {
-    $("productImagePreview").src = reader.result;
-    $("productImagePreview").classList.remove("hidden");
     selectedProduct = {
       ...(selectedProduct || {}),
       uploadedImage: reader.result
     };
+
+    $("productImagePreview").src = reader.result;
+    $("productImagePreview").classList.remove("hidden");
   };
 
   reader.readAsDataURL(file);
@@ -1770,25 +1460,26 @@ $("productForm").addEventListener("submit", event => {
     return notify("Enter a valid stock quantity.", "error");
   }
 
-  if (users.length && products.some(product =>
-    product.id !== id &&
-    product.name.toLowerCase() === name.toLowerCase()
+  if (products.some(p =>
+    p.id !== id && p.name.toLowerCase() === name.toLowerCase()
   )) {
     return notify("Product name already exists.", "error");
   }
 
-  if (/^https?:\/\//i.test(image) && !/^https?:\/\/\S+$/i.test(image)) {
+  if (
+    /^https?:\/\//i.test(image) &&
+    !/^https?:\/\/\S+$/i.test(image)
+  ) {
     return notify("Invalid image URL.", "error");
   }
 
-  const previous = products.map(product => ({ ...product }));
+  const before = products.map(p => ({ ...p }));
 
   if (id) {
-    const product = products.find(item => item.id === id);
+    const p = products.find(x => x.id === id);
+    if (!p) return;
 
-    if (!product) return;
-
-    Object.assign(product, {
+    Object.assign(p, {
       name,
       category,
       description,
@@ -1809,18 +1500,22 @@ $("productForm").addEventListener("submit", event => {
   }
 
   if (!saveAll()) {
-    products = previous;
+    products = before;
     return;
   }
 
   selectedProduct = null;
   closeModal("productModal");
+  $("productImageFile").value = "";
 
   renderAdminProducts();
   renderInventory();
   renderDashboard();
 
-  notify(id ? "Product updated successfully." : "Product added successfully.");
+  notify(id
+    ? "Product updated successfully."
+    : "Product added successfully."
+  );
 });
 
 function renderAdminProducts() {
@@ -1828,34 +1523,36 @@ function renderAdminProducts() {
 
   const query = $("adminProductSearch").value.toLowerCase().trim();
 
-  const list = products.filter(product =>
-    product.name.toLowerCase().includes(query) ||
-    product.category.toLowerCase().includes(query)
+  const list = products.filter(p =>
+    p.name.toLowerCase().includes(query) ||
+    p.category.toLowerCase().includes(query)
   );
 
   $("adminProducts").innerHTML = list.length
-    ? list.map(product => `
+    ? list.map(p => `
       <div class="admin-item">
         <div class="admin-item-main">
           <div class="cart-thumb">
-            ${/^https?:\/\//i.test(product.image || "")
-              ? `<img src="${escapeHTML(product.image)}" alt="">`
-              : escapeHTML(product.image || "🌸")}
+            ${
+              /^https?:\/\//i.test(p.image || "") ||
+              /^data:image\//i.test(p.image || "")
+                ? `<img src="${esc(p.image)}" alt="">`
+                : esc(p.image || "🌸")
+            }
           </div>
 
           <div class="cart-detail">
-            <strong>${escapeHTML(product.name)}</strong>
-            <small>${escapeHTML(product.category)} · ${money(product.price)}</small>
-            <small>Stock: ${product.stock}</small>
+            <strong>${esc(p.name)}</strong>
+            <small>${esc(p.category)} · ${money(p.price)}</small>
+            <small>Stock: ${p.stock}</small>
           </div>
         </div>
 
         <div class="admin-actions">
-          <button class="btn-soft" data-edit-product="${product.id}">
+          <button class="btn-soft" data-edit-product="${p.id}">
             Edit
           </button>
-
-          <button class="btn-danger" data-delete-product="${product.id}">
+          <button class="btn-danger" data-delete-product="${p.id}">
             Delete
           </button>
         </div>
@@ -1863,17 +1560,19 @@ function renderAdminProducts() {
     `).join("")
     : '<div class="empty-state">No products found.</div>';
 
-  $("adminProducts").querySelectorAll("[data-edit-product]").forEach(button => {
-    button.addEventListener("click", () =>
-      openProductModal(Number(button.dataset.editProduct))
-    );
-  });
+  $("adminProducts").querySelectorAll("[data-edit-product]")
+    .forEach(button => {
+      button.addEventListener("click", () =>
+        openProductModal(Number(button.dataset.editProduct))
+      );
+    });
 
-  $("adminProducts").querySelectorAll("[data-delete-product]").forEach(button => {
-    button.addEventListener("click", () =>
-      deleteProduct(Number(button.dataset.deleteProduct))
-    );
-  });
+  $("adminProducts").querySelectorAll("[data-delete-product]")
+    .forEach(button => {
+      button.addEventListener("click", () =>
+        deleteProduct(Number(button.dataset.deleteProduct))
+      );
+    });
 }
 
 $("adminProductSearch").addEventListener("input", renderAdminProducts);
@@ -1881,27 +1580,32 @@ $("adminProductSearch").addEventListener("input", renderAdminProducts);
 function deleteProduct(id) {
   if (currentRole !== "admin") return;
 
-  const product = products.find(item => item.id === id);
+  const p = products.find(x => x.id === id);
 
-  if (!product) return;
+  if (!p || !confirm(`Delete ${p.name}?`)) return;
 
-  if (!confirm(`Delete ${product.name}?`)) return;
-
-  const previous = products;
-  const previousCarts = JSON.stringify(carts);
-
-  products = products.filter(item => item.id !== id);
-
-  // Remove deleted product from all shopping carts.
-  Object.keys(carts).forEach(userId => {
-    carts[userId] = carts[userId].filter(
-      item => item.productId !== id
+  if (orders.some(o =>
+    o.status !== "Cancelled" &&
+    o.items.some(i => i.productId === id)
+  )) {
+    return notify(
+      "This product is part of an active or completed order and cannot be deleted.",
+      "error"
     );
+  }
+
+  const oldProducts = products.map(x => ({ ...x }));
+  const oldCarts = JSON.parse(JSON.stringify(carts));
+
+  products = products.filter(x => x.id !== id);
+
+  Object.keys(carts).forEach(uid => {
+    carts[uid] = (carts[uid] || []).filter(i => i.productId !== id);
   });
 
   if (!saveAll()) {
-    products = previous;
-    carts = JSON.parse(previousCarts);
+    products = oldProducts;
+    carts = oldCarts;
     return;
   }
 
@@ -1912,10 +1616,7 @@ function deleteProduct(id) {
   notify("Product deleted.");
 }
 
-
-/* =========================================================
-   16. INVENTORY MANAGEMENT
-========================================================= */
+/* INVENTORY */
 
 function renderInventory() {
   if (currentRole !== "admin") return;
@@ -1950,24 +1651,33 @@ function renderInventory() {
             <th>Action</th>
           </tr>
         </thead>
+
         <tbody>
-          ${products.map(product => `
+          ${products.map(p => `
             <tr>
-              <td>${escapeHTML(product.name)}</td>
-              <td>${escapeHTML(product.category)}</td>
-              <td>${money(product.price)}</td>
-              <td>${product.stock}</td>
+              <td>${esc(p.name)}</td>
+              <td>${esc(p.category)}</td>
+              <td>${money(p.price)}</td>
+              <td>${p.stock}</td>
               <td>
                 <span class="status ${
-                  product.stock === 0 ? "cancelled" :
-                  product.stock <= 5 ? "" : "delivered"
+                  p.stock === 0
+                    ? "cancelled"
+                    : p.stock <= 5
+                      ? ""
+                      : "delivered"
                 }">
-                  ${product.stock === 0 ? "Out of Stock" :
-                    product.stock <= 5 ? "Low Stock" : "In Stock"}
+                  ${
+                    p.stock === 0
+                      ? "Out of Stock"
+                      : p.stock <= 5
+                        ? "Low Stock"
+                        : "In Stock"
+                  }
                 </span>
               </td>
               <td>
-                <button class="btn-soft" data-inventory-edit="${product.id}">
+                <button class="btn-soft" data-inventory-edit="${p.id}">
                   Update
                 </button>
               </td>
@@ -1978,111 +1688,139 @@ function renderInventory() {
     </div>
   `;
 
-  $("inventoryList").querySelectorAll("[data-inventory-edit]").forEach(button => {
-    button.addEventListener("click", () =>
-      openProductModal(Number(button.dataset.inventoryEdit))
-    );
-  });
+  $("inventoryList").querySelectorAll("[data-inventory-edit]")
+    .forEach(button => {
+      button.addEventListener("click", () =>
+        openProductModal(Number(button.dataset.inventoryEdit))
+      );
+    });
 }
 
-
-/* =========================================================
-   17. CUSTOMER ACCOUNT MANAGEMENT
-========================================================= */
+/* CUSTOMER ACCOUNT MANAGEMENT */
 
 function renderAdminUsers() {
   if (currentRole !== "admin") return;
 
-  const customers = users.filter(user => user.role === "customer");
+  const customers = users.filter(u => u.role === "customer");
+  const cutoff = Date.now() - (30 * 24 * 60 * 60 * 1000);
 
-  $("adminUsers").innerHTML = customers.length
-    ? `
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Username</th>
-              <th>Phone</th>
-              <th>Joined</th>
-              <th>Account Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
+  const isWithinLast30Days = value => {
+    const time = Date.parse(value || "");
+    return Number.isFinite(time) && time >= cutoff;
+  };
 
-          <tbody>
-            ${customers.map(user => `
-              <tr>
-                <td>${escapeHTML(user.fullName)}</td>
-                <td>${escapeHTML(user.username)}</td>
-                <td>${escapeHTML(user.phone || "—")}</td>
-                <td>${escapeHTML(formatDate(user.createdAt))}</td>
-                <td>${user.active === false ? "Disabled" : "Active"}</td>
-                <td>
-                  <button
-                    class="btn-soft"
-                    data-toggle-user="${user.id}">
-                    ${user.active === false ? "Enable" : "Disable"}
-                  </button>
+  const newUsers = customers.filter(u =>
+    isWithinLast30Days(u.createdAt)
+  ).length;
 
-                  <button
-                    class="btn-danger"
-                    data-delete-user="${user.id}">
-                    Delete
-                  </button>
-                </td>
-              </tr>
-            `).join("")}
-          </tbody>
-        </table>
+  const activeUsers = customers.filter(u =>
+    u.active !== false && isWithinLast30Days(u.lastLogin)
+  ).length;
+
+  $("adminUsers").innerHTML = `
+    <div class="stats-grid">
+      <div class="stat-card">
+        <span>Total Users</span>
+        <strong>${customers.length}</strong>
       </div>
-    `
-    : '<div class="empty-state">No customer accounts found.</div>';
 
-  $("adminUsers").querySelectorAll("[data-toggle-user]").forEach(button => {
-    button.addEventListener("click", () =>
-      toggleUser(Number(button.dataset.toggleUser))
-    );
-  });
+      <div class="stat-card">
+        <span>New Users (Last 30 Days)</span>
+        <strong>${newUsers}</strong>
+      </div>
 
-  $("adminUsers").querySelectorAll("[data-delete-user]").forEach(button => {
-    button.addEventListener("click", () =>
-      deleteUser(Number(button.dataset.deleteUser))
-    );
-  });
+      <div class="stat-card">
+        <span>Active Users (Logged In, Last 30 Days)</span>
+        <strong>${activeUsers}</strong>
+      </div>
+    </div>
+
+    ${
+      customers.length
+        ? `
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Username</th>
+                  <th>Phone</th>
+                  <th>Joined</th>
+                  <th>Last Login</th>
+                  <th>Account Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                ${customers.map(u => `
+                  <tr>
+                    <td>${esc(u.fullName)}</td>
+                    <td>${esc(u.username)}</td>
+                    <td>${esc(u.phone || "—")}</td>
+                    <td>${esc(dateText(u.createdAt))}</td>
+                    <td>${u.lastLogin ? esc(dateText(u.lastLogin)) : "Never"}</td>
+                    <td>${u.active === false ? "Disabled" : "Active"}</td>
+                    <td>
+                      <button class="btn-soft" data-toggle-user="${u.id}">
+                        ${u.active === false ? "Enable" : "Disable"}
+                      </button>
+
+                      <button class="btn-danger" data-delete-user="${u.id}">
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+          </div>
+        `
+        : '<div class="empty-state">No customer accounts found.</div>'
+    }
+  `;
+
+  $("adminUsers").querySelectorAll("[data-toggle-user]")
+    .forEach(button => {
+      button.addEventListener("click", () =>
+        toggleUser(Number(button.dataset.toggleUser))
+      );
+    });
+
+  $("adminUsers").querySelectorAll("[data-delete-user]")
+    .forEach(button => {
+      button.addEventListener("click", () =>
+        deleteUser(Number(button.dataset.deleteUser))
+      );
+    });
 }
 
 function toggleUser(id) {
   if (currentRole !== "admin") return;
 
-  const user = users.find(item =>
-    item.id === id && item.role === "customer"
-  );
+  const u = users.find(x => x.id === id && x.role === "customer");
+  if (!u) return;
 
-  if (!user) return;
-
-  user.active = user.active === false;
+  const old = u.active;
+  u.active = old === false;
 
   if (!save(DB.users, users)) {
-    user.active = !user.active;
+    u.active = old;
     return;
   }
 
   renderAdminUsers();
-  notify(user.active ? "Account enabled." : "Account disabled.");
+  notify(u.active ? "Account enabled." : "Account disabled.");
 }
 
 function deleteUser(id) {
   if (currentRole !== "admin") return;
 
-  const user = users.find(item =>
-    item.id === id && item.role === "customer"
-  );
+  const u = users.find(x => x.id === id && x.role === "customer");
+  if (!u) return;
 
-  if (!user) return;
-
-  if (orders.some(order =>
-    order.customerId === id && order.status !== "Cancelled"
+  if (orders.some(o =>
+    o.customerId === id && o.status !== "Cancelled"
   )) {
     return notify(
       "Cannot delete a customer with active or completed orders.",
@@ -2090,49 +1828,37 @@ function deleteUser(id) {
     );
   }
 
-  if (!confirm(`Delete ${user.fullName}'s account?`)) return;
+  if (!confirm(`Delete ${u.fullName}'s account?`)) return;
 
-  const previousUsers = users;
-  const previousCarts = { ...carts };
+  const oldUsers = users;
+  const oldCarts = JSON.parse(JSON.stringify(carts));
 
-  users = users.filter(item => item.id !== id);
+  users = users.filter(x => x.id !== id);
   delete carts[id];
 
   if (!saveAll()) {
-    users = previousUsers;
-    carts = previousCarts;
+    users = oldUsers;
+    carts = oldCarts;
     return;
   }
 
   renderAdminUsers();
   renderDashboard();
-
   notify("Customer account deleted.");
 }
 
-
-/* =========================================================
-   18. ADMIN DASHBOARD AND REPORTS
-========================================================= */
+/* DASHBOARD AND ADMIN SETTINGS */
 
 function renderDashboard() {
   if (currentRole !== "admin") return;
 
   const revenue = orders
-    .filter(order => order.status === "Completed")
-    .reduce((sum, order) => sum + Number(order.total || 0), 0);
+    .filter(o => o.status === "Completed")
+    .reduce((sum, o) => sum + Number(o.total || 0), 0);
 
-  const pending = orders.filter(
-    order => order.status === "Pending"
-  ).length;
-
-  const completed = orders.filter(
-    order => order.status === "Completed"
-  ).length;
-
-  const customers = users.filter(
-    user => user.role === "customer"
-  ).length;
+  const pending = orders.filter(o => o.status === "Pending").length;
+  const completed = orders.filter(o => o.status === "Completed").length;
+  const customers = users.filter(u => u.role === "customer").length;
 
   $("dashboardStats").innerHTML = `
     <div class="stat-card">
@@ -2181,14 +1907,15 @@ function renderDashboard() {
               <th>Status</th>
             </tr>
           </thead>
+
           <tbody>
-            ${recent.map(order => `
+            ${recent.map(o => `
               <tr>
-                <td>PV-${order.id}</td>
-                <td>${escapeHTML(order.customerName)}</td>
-                <td>${escapeHTML(formatDate(order.date))}</td>
-                <td>${money(order.total)}</td>
-                <td>${escapeHTML(order.status)}</td>
+                <td>PV-${o.id}</td>
+                <td>${esc(o.customerName)}</td>
+                <td>${esc(dateText(o.date))}</td>
+                <td>${money(o.total)}</td>
+                <td>${esc(o.status)}</td>
               </tr>
             `).join("")}
           </tbody>
@@ -2198,14 +1925,7 @@ function renderDashboard() {
     : '<div class="empty-state">No recent orders.</div>';
 }
 
-
-/* =========================================================
-   19. ADMIN ACCOUNT SETTINGS
-========================================================= */
-
 function loadSettings() {
-  if (currentRole !== "admin") return;
-
   $("settingsUsername").value = currentUser.username;
   $("settingsPassword").value = "";
   $("settingsConfirm").value = "";
@@ -2222,79 +1942,68 @@ $("settingsForm").addEventListener("submit", event => {
   const confirmPassword = $("settingsConfirm").value;
 
   if (!/^[a-zA-Z0-9_.-]{3,30}$/.test(username)) {
-    $("settingsMessage").textContent = "Invalid username.";
-    return;
+    return $("settingsMessage").textContent = "Invalid username.";
   }
 
-  if (users.some(user =>
-    user.id !== currentUser.id &&
-    user.username.toLowerCase() === username.toLowerCase()
+  if (users.some(u =>
+    u.id !== currentUser.id &&
+    u.username.toLowerCase() === username.toLowerCase()
   )) {
-    $("settingsMessage").textContent = "Username is already in use.";
-    return;
+    return $("settingsMessage").textContent = "Username is already in use.";
   }
 
-  if (password || confirmPassword) {
-    if (password.length < 6) {
-      $("settingsMessage").textContent =
-        "Password must contain at least 6 characters.";
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      $("settingsMessage").textContent = "Passwords do not match.";
-      return;
-    }
+  if (
+    (password || confirmPassword) &&
+    (password.length < 6 || password !== confirmPassword)
+  ) {
+    return $("settingsMessage").textContent =
+      password.length < 6
+        ? "Password must contain at least 6 characters."
+        : "Passwords do not match.";
   }
 
-  const oldUsername = currentUser.username;
-  const oldPassword = currentUser.password;
+  const old = {
+    username: currentUser.username,
+    password: currentUser.password
+  };
 
   currentUser.username = username;
 
   if (password) currentUser.password = password;
 
   if (!save(DB.users, users)) {
-    currentUser.username = oldUsername;
-    currentUser.password = oldPassword;
+    Object.assign(currentUser, old);
     return;
   }
 
   $("settingsPassword").value = "";
   $("settingsConfirm").value = "";
-
   $("settingsMessage").textContent =
     "Administrator settings saved successfully.";
 
   notify("Admin settings updated.");
 });
 
-
-/* =========================================================
-   20. PRINT RECEIPT
-========================================================= */
+/* PRINT RECEIPT */
 
 function printReceipt() {
   const content = $("receiptContent");
 
   if (!content.innerHTML.trim()) return;
 
-  const printWindow = window.open(
-    "",
-    "_blank",
-    "width=850,height=750"
-  );
+  const win = window.open("", "_blank", "width=850,height=750");
 
-  if (!printWindow) {
+  if (!win) {
     return notify("Allow pop-ups to print your receipt.", "error");
   }
 
-  printWindow.document.write(`
+  win.document.write(`
     <!DOCTYPE html>
-    <html lang="en">
+    <html>
       <head>
         <meta charset="UTF-8">
         <title>Petal & Vine Receipt</title>
+
         <style>
           body {
             padding: 25px;
@@ -2302,7 +2011,9 @@ function printReceipt() {
             font-family: Arial, sans-serif;
           }
 
-          h2 { color: #5d2c43; }
+          h2 {
+            color: #5d2c43;
+          }
 
           table {
             width: 100%;
@@ -2315,7 +2026,9 @@ function printReceipt() {
             text-align: left;
           }
 
-          .receipt-head { text-align: center; }
+          .receipt-head {
+            text-align: center;
+          }
 
           .summary-line {
             display: flex;
@@ -2329,13 +2042,16 @@ function printReceipt() {
           }
 
           @media print {
-            body { padding: 0; }
+            body {
+              padding: 0;
+            }
           }
         </style>
       </head>
 
       <body>
         ${content.innerHTML}
+
         <script>
           window.onload = function() {
             window.print();
@@ -2345,20 +2061,13 @@ function printReceipt() {
     </html>
   `);
 
-  printWindow.document.close();
+  win.document.close();
 }
 
-window.printReceipt = printReceipt;
+// The HTML button calls printReceipt() directly.
+// Do not attach a second click handler.
 
-$("receiptModal").querySelector(".btn-primary").addEventListener(
-  "click",
-  printReceipt
-);
-
-
-/* =========================================================
-   21. MODAL BEHAVIOR
-========================================================= */
+/* MODAL CLOSE BEHAVIOR */
 
 document.querySelectorAll(".modal").forEach(modal => {
   modal.addEventListener("click", event => {
@@ -2376,10 +2085,7 @@ document.addEventListener("keydown", event => {
   }
 });
 
-
-/* =========================================================
-   22. INITIALIZATION
-========================================================= */
+/* START APPLICATION */
 
 function initializeApplication() {
   initializeData();
