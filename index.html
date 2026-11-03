@@ -1,878 +1,240 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#7b3f5b">
-  <meta name="description" content="Petal & Vine Flower Boutique">
-  <title>Petal & Vine | Flower Boutique</title>
-
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet">
-
-  <link rel="stylesheet" href="style.css">
-  <script src="script.js" defer></script>
-</head>
-<body>
-
-  <div id="toast" class="toast hidden" role="status"></div>
-
-  <!-- LOGIN AND REGISTRATION -->
-  <main id="authScreen" class="auth-screen">
-
-    <section class="auth-brand">
-      <div class="brand-mark">✿</div>
-      <p class="eyebrow">FLOWER BOUTIQUE</p>
-      <h1>Petal <span>&</span> Vine</h1>
-      <p>Thoughtful flowers for life's beautiful moments.</p>
-      <div class="auth-flower">🌷 🌸 🌹</div>
-    </section>
-
-    <section class="auth-panel">
-
-      <form id="loginForm" class="auth-form">
-        <p class="eyebrow">WELCOME BACK</p>
-        <h2>Sign in</h2>
-
-        <label for="loginUsername">Username</label>
-        <input id="loginUsername" autocomplete="username" required>
-
-        <label for="loginPassword">Password</label>
-        <div class="password-wrap">
-          <input
-            id="loginPassword"
-            type="password"
-            autocomplete="current-password"
-            required
-          >
-          <button
-            class="toggle-password"
-            type="button"
-            data-target="loginPassword"
-          >Show</button>
-        </div>
-
-        <p id="loginMessage" class="form-message"></p>
-
-        <button class="btn btn-primary full" type="submit">
-          Log In
-        </button>
-
-        <p class="auth-switch">
-          Don't have an account?
-          <button
-            type="button"
-            class="text-button"
-            id="showRegister"
-          >Create account</button>
-        </p>
-
-        <p class="hint">
-          Admin demo:
-          <strong>admin</strong> /
-          <strong>Admin123</strong>
-        </p>
-      </form>
-
-      <form id="registerForm" class="auth-form hidden">
-        <p class="eyebrow">JOIN OUR COMMUNITY</p>
-        <h2>Create account</h2>
-
-        <label for="registerName">Full name</label>
-        <input id="registerName" maxlength="100" required>
-
-        <label for="registerUsername">Username</label>
-        <input
-          id="registerUsername"
-          minlength="3"
-          maxlength="30"
-          required
-        >
-
-        <label for="registerPassword">Password</label>
-        <div class="password-wrap">
-          <input
-            id="registerPassword"
-            type="password"
-            minlength="6"
-            required
-          >
-          <button
-            class="toggle-password"
-            type="button"
-            data-target="registerPassword"
-          >Show</button>
-        </div>
-
-        <label for="registerConfirm">Confirm password</label>
-        <input
-          id="registerConfirm"
-          type="password"
-          minlength="6"
-          required
-        >
-
-        <p id="registerMessage" class="form-message"></p>
-
-        <button class="btn btn-primary full" type="submit">
-          Create Account
-        </button>
-
-        <p class="auth-switch">
-          Already registered?
-          <button
-            type="button"
-            class="text-button"
-            id="showLogin"
-          >Sign in</button>
-        </p>
-      </form>
-
-    </section>
-  </main>
-
-
-  <!-- MAIN APPLICATION -->
-  <div id="appScreen" class="app-shell hidden">
-
-    <header class="topbar">
-      <button
-        class="brand-small"
-        type="button"
-        onclick="goHome()"
-      >
-        <span>✿</span> Petal & Vine
-      </button>
-
-      <div class="topbar-right">
-        <span class="welcome">
-          Hello, <strong id="headerUser"></strong>
-        </span>
-
-        <span id="roleLabel" class="role-label"></span>
-
-        <button
-          id="logoutButton"
-          class="btn btn-outline btn-small"
-          type="button"
-        >
-          Log Out
-        </button>
-      </div>
-    </header>
-
-
-    <div class="app-layout">
-
-      <!-- SIDEBAR -->
-      <aside class="sidebar">
-
-        <div class="sidebar-intro">
-          <span class="sidebar-flower">❀</span>
-          <strong id="welcomeText"></strong>
-          <small>Welcome to the boutique</small>
-        </div>
-
-        <!-- CUSTOMER NAVIGATION -->
-        <nav id="customerNav" class="nav-menu">
-
-          <button
-            class="nav-link active"
-            data-page="shop"
-            onclick="customerPage('shop',this)"
-          >
-            🌸 <span>Shop Flowers</span>
-          </button>
-
-          <button
-            class="nav-link"
-            data-page="cart"
-            onclick="customerPage('cart',this)"
-          >
-            🛍️ <span>My Cart</span>
-            <b id="cartCount">0</b>
-          </button>
-
-          <button
-            class="nav-link"
-            data-page="orders"
-            onclick="customerPage('orders',this)"
-          >
-            📦 <span>My Orders</span>
-          </button>
-
-          <button
-            class="nav-link"
-            data-page="receipts"
-            onclick="customerPage('receipts',this)"
-          >
-            🧾 <span>Receipts</span>
-          </button>
-
-          <button
-            class="nav-link"
-            data-page="transactions"
-            onclick="customerPage('transactions',this)"
-          >
-            📊 <span>Transactions</span>
-          </button>
-
-          <button
-            class="nav-link"
-            data-page="profile"
-            onclick="customerPage('profile',this)"
-          >
-            👤 <span>My Profile</span>
-          </button>
-
-          <button
-            class="nav-link"
-            data-page="about"
-            onclick="customerPage('about',this)"
-          >
-            ♡ <span>About Us</span>
-          </button>
-
-        </nav>
-
-
-        <!-- ADMIN NAVIGATION -->
-        <nav id="adminNav" class="nav-menu hidden">
-
-          <button
-            class="nav-link active"
-            onclick="adminPage('dashboard',this)"
-          >
-            ▦ <span>Dashboard</span>
-          </button>
-
-          <button
-            class="nav-link"
-            onclick="adminPage('products',this)"
-          >
-            🌷 <span>Products</span>
-          </button>
-
-          <button
-            class="nav-link"
-            onclick="adminPage('inventory',this)"
-          >
-            📋 <span>Inventory</span>
-          </button>
-
-          <button
-            class="nav-link"
-            onclick="adminPage('orders',this)"
-          >
-            📦 <span>Orders</span>
-          </button>
-
-          <button
-            class="nav-link"
-            onclick="adminPage('users',this)"
-          >
-            👥 <span>Customers</span>
-          </button>
-
-          <button
-            class="nav-link"
-            onclick="adminPage('settings',this)"
-          >
-            ⚙ <span>Settings</span>
-          </button>
-
-        </nav>
-
-      </aside>
-
-
-      <!-- MAIN CONTENT -->
-      <main class="main-content">
-
-        <div class="page-heading">
-          <div>
-            <p class="eyebrow">PETAL & VINE</p>
-            <h1 id="pageTitle">Shop Flowers</h1>
-          </div>
-          <span class="heading-flower">✿</span>
-        </div>
-
-
-        <!-- CUSTOMER SHOP -->
-        <section id="customer-shop" class="page">
-
-          <div class="hero-banner">
-            <div>
-              <p class="eyebrow">MADE WITH LOVE</p>
-              <h2>Flowers that speak<br>from the heart.</h2>
-              <p>Find the perfect blooms for every occasion.</p>
-            </div>
-
-            <div class="hero-art">💐</div>
-          </div>
-
-          <div class="section-toolbar">
-            <div>
-              <h2>Our Flower Collection</h2>
-              <p class="muted">
-                Choose something beautiful today.
-              </p>
-            </div>
-
-            <input
-              id="productSearch"
-              class="search-input"
-              placeholder="Search flowers..."
-              aria-label="Search flowers"
-            >
-          </div>
-
-          <div id="shopProducts" class="product-grid"></div>
-
-        </section>
-
-
-        <!-- CUSTOMER CART -->
-        <section id="customer-cart" class="page hidden">
-
-          <div class="section-heading">
-            <h2>Your Shopping Cart</h2>
-            <p class="muted">
-              Review your flowers before checkout.
-            </p>
-          </div>
-
-          <div id="cartContent"></div>
-
-        </section>
-
-
-        <!-- CUSTOMER ORDERS -->
-        <section id="customer-orders" class="page hidden">
-
-          <div class="section-heading">
-            <h2>Order History</h2>
-            <p class="muted">
-              Track the status of your purchases.
-            </p>
-          </div>
-
-          <div id="customerOrders"></div>
-
-        </section>
-
-
-        <!-- CUSTOMER RECEIPTS -->
-        <section id="customer-receipts" class="page hidden">
-
-          <div class="section-heading">
-            <h2>Your Receipts</h2>
-            <p class="muted">
-              View and print your order receipts.
-            </p>
-          </div>
-
-          <div id="customerReceipts"></div>
-
-        </section>
-
-
-        <!-- CUSTOMER TRANSACTIONS -->
-        <section id="customer-transactions" class="page hidden">
-
-          <div class="section-heading">
-            <h2>Transaction History</h2>
-            <p class="muted">
-              A summary of your purchases.
-            </p>
-          </div>
-
-          <div id="customerTransactions"></div>
-
-        </section>
-
-
-        <!-- CUSTOMER PROFILE -->
-        <section id="customer-profile" class="page hidden">
-
-          <div class="form-card">
-            <h2>My Profile</h2>
-
-            <form id="profileForm" class="form-grid">
-
-              <label>
-                Full name
-                <input
-                  id="profileName"
-                  required
-                  maxlength="100"
-                >
-              </label>
-
-              <label>
-                Username
-                <input
-                  id="profileUsername"
-                  required
-                  maxlength="30"
-                >
-              </label>
-
-              <label>
-                Phone number
-                <input
-                  id="profilePhone"
-                  type="tel"
-                >
-              </label>
-
-              <label class="span-2">
-                Delivery address
-                <textarea
-                  id="profileAddress"
-                  rows="3"
-                ></textarea>
-              </label>
-
-              <label class="span-2">
-                New password
-                <small>(leave blank to keep current password)</small>
-                <input
-                  id="profilePassword"
-                  type="password"
-                  minlength="6"
-                >
-              </label>
-
-              <div class="span-2">
-                <button class="btn btn-primary" type="submit">
-                  Save Profile
-                </button>
-              </div>
-
-            </form>
-          </div>
-
-        </section>
-
-
-        <!-- ABOUT US -->
-        <section id="customer-about" class="page hidden">
-
-          <div class="about-card">
-
-            <div class="about-icon">✿</div>
-
-            <p class="eyebrow">OUR STORY</p>
-
-            <h2>Beauty in every bloom.</h2>
-
-            <p>
-              Petal & Vine is a flower boutique dedicated to
-              creating thoughtful arrangements for life's
-              meaningful moments. Whether you are celebrating,
-              expressing gratitude, or simply brightening
-              someone's day, we are happy to help you share
-              something beautiful.
-            </p>
-
-            <p class="muted">
-              Thank you for letting us be part of your
-              special moments.
-            </p>
-
-          </div>
-
-        </section>
-
-
-        <!-- ADMIN DASHBOARD -->
-        <section id="admin-dashboard" class="page hidden">
-
-          <div class="section-heading">
-            <h2>Overview</h2>
-            <p class="muted">
-              A quick look at your boutique.
-            </p>
-          </div>
-
-          <div id="dashboardStats" class="stats-grid"></div>
-
-          <div class="panel">
-            <h2>Recent Orders</h2>
-            <div id="recentOrders"></div>
-          </div>
-
-        </section>
-
-
-        <!-- ADMIN PRODUCTS -->
-        <section id="admin-products" class="page hidden">
-
-          <div class="section-toolbar">
-            <div>
-              <h2>Product Catalog</h2>
-              <p class="muted">
-                Add, update, search, or remove products.
-              </p>
-            </div>
-
-            <button
-              class="btn btn-primary"
-              onclick="openProductModal()"
-            >
-              + Add Product
-            </button>
-          </div>
-
-          <input
-            id="adminProductSearch"
-            class="search-input"
-            placeholder="Search products..."
-            aria-label="Search admin products"
-          >
-
-          <div id="adminProducts" class="admin-list"></div>
-
-        </section>
-
-
-        <!-- ADMIN INVENTORY -->
-        <section id="admin-inventory" class="page hidden">
-
-          <div class="section-heading">
-            <h2>Inventory Management</h2>
-            <p class="muted">
-              Monitor available flower stocks.
-            </p>
-          </div>
-
-          <div id="inventoryList"></div>
-
-        </section>
-
-
-        <!-- ADMIN ORDERS -->
-        <section id="admin-orders" class="page hidden">
-
-          <div class="section-heading">
-            <h2>Customer Orders</h2>
-            <p class="muted">
-              Manage orders in first-in, first-out order.
-            </p>
-          </div>
-
-          <div id="adminOrders"></div>
-
-        </section>
-
-
-        <!-- ADMIN CUSTOMERS -->
-        <section id="admin-users" class="page hidden">
-
-          <div class="section-heading">
-            <h2>Customer Accounts</h2>
-            <p class="muted">
-              Manage registered customer accounts.
-            </p>
-          </div>
-
-          <div id="adminUsers"></div>
-
-        </section>
-
-
-        <!-- ADMIN SETTINGS -->
-        <section id="admin-settings" class="page hidden">
-
-          <div class="form-card">
-            <h2>Administrator Settings</h2>
-
-            <form id="settingsForm" class="form-grid">
-
-              <label>
-                Username
-                <input id="settingsUsername" required>
-              </label>
-
-              <label>
-                New password
-                <input
-                  id="settingsPassword"
-                  type="password"
-                  minlength="6"
-                >
-              </label>
-
-              <label>
-                Confirm new password
-                <input
-                  id="settingsConfirm"
-                  type="password"
-                  minlength="6"
-                >
-              </label>
-
-              <p
-                id="settingsMessage"
-                class="form-message span-2"
-              ></p>
-
-              <div class="span-2">
-                <button class="btn btn-primary" type="submit">
-                  Save Settings
-                </button>
-              </div>
-
-            </form>
-          </div>
-
-        </section>
-
-      </main>
-
-    </div>
-  </div>
-
-
-  <!-- PRODUCT MODAL -->
-  <div
-    id="productModal"
-    class="modal hidden"
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby="productModalTitle"
-  >
-
-    <div class="modal-card">
-
-      <button
-        class="modal-close"
-        onclick="closeModal('productModal')"
-        aria-label="Close"
-      >×</button>
-
-      <h2 id="productModalTitle">Add Product</h2>
-
-      <form id="productForm" class="form-grid">
-
-        <input id="productId" type="hidden">
-
-        <label>
-          Product name
-          <input
-            id="productName"
-            required
-            maxlength="100"
-          >
-        </label>
-
-        <label>
-          Category
-          <select id="productCategory">
-            <option>Rose</option>
-            <option>Sunflower</option>
-            <option>Tulip</option>
-            <option>Mixed Bouquet</option>
-            <option>Other</option>
-          </select>
-        </label>
-
-        <label class="span-2">
-          Description
-          <textarea
-            id="productDescription"
-            rows="2"
-          ></textarea>
-        </label>
-
-        <label>
-          Price (₱)
-          <input
-            id="productPrice"
-            type="number"
-            min="0.01"
-            step="0.01"
-            required
-          >
-        </label>
-
-        <label>
-          Stock quantity
-          <input
-            id="productStock"
-            type="number"
-            min="0"
-            step="1"
-            required
-          >
-        </label>
-
-        <label class="span-2">
-          Image URL or emoji
-          <input
-            id="productImage"
-            placeholder="🌹 or https://example.com/flower.jpg"
-          >
-        </label>
-
-        <label class="span-2">
-          Or upload image (max 700 KB)
-          <input
-            id="productImageFile"
-            type="file"
-            accept="image/*"
-          >
-        </label>
-
-        <img
-          id="productImagePreview"
-          class="image-preview hidden"
-          alt="Product preview"
-        >
-
-        <div class="span-2 modal-actions">
-
-          <button
-            class="btn btn-outline"
-            type="button"
-            onclick="closeModal('productModal')"
-          >
-            Cancel
-          </button>
-
-          <button class="btn btn-primary" type="submit">
-            Save Product
-          </button>
-
-        </div>
-
-      </form>
-
-    </div>
-  </div>
-
-
-  <!-- CHECKOUT MODAL -->
-  <div
-    id="checkoutModal"
-    class="modal hidden"
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby="checkoutTitle"
-  >
-
-    <div class="modal-card">
-
-      <button
-        class="modal-close"
-        onclick="closeModal('checkoutModal')"
-        aria-label="Close"
-      >×</button>
-
-      <h2 id="checkoutTitle">Checkout</h2>
-
-      <div id="checkoutSummary"></div>
-
-      <form id="checkoutForm" class="form-grid">
-
-        <label class="span-2">
-          Recipient name
-          <input
-            id="checkoutName"
-            required
-            maxlength="100"
-          >
-        </label>
-
-        <label class="span-2">
-          Phone number
-          <input
-            id="checkoutPhone"
-            type="tel"
-            required
-          >
-        </label>
-
-        <label class="span-2">
-          Delivery address
-          <textarea
-            id="checkoutAddress"
-            rows="3"
-            required
-          ></textarea>
-        </label>
-
-        <p class="span-2 payment-note">
-          Payment method:
-          <strong>Cash on Delivery</strong>
-        </p>
-
-        <div class="span-2 modal-actions">
-
-          <button
-            class="btn btn-outline"
-            type="button"
-            onclick="closeModal('checkoutModal')"
-          >
-            Cancel
-          </button>
-
-          <button class="btn btn-primary" type="submit">
-            Place Order
-          </button>
-
-        </div>
-
-      </form>
-
-    </div>
-  </div>
-
-
-  <!-- RECEIPT MODAL -->
-  <div
-    id="receiptModal"
-    class="modal hidden"
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby="receiptTitle"
-  >
-
-    <div class="modal-card receipt-modal-card">
-
-      <button
-        class="modal-close"
-        onclick="closeModal('receiptModal')"
-        aria-label="Close"
-      >×</button>
-
-      <div id="receiptContent"></div>
-
-      <div class="modal-actions print-actions">
-
-        <button
-          class="btn btn-outline"
-          type="button"
-          onclick="closeModal('receiptModal')"
-        >
-          Close
-        </button>
-
-        <button
-          class="btn btn-primary"
-          type="button"
-          id="printReceiptButton"
-          onclick="printReceipt()"
-        >
-          Print Receipt
-        </button>
-
-      </div>
-
-    </div>
-  </div>
-
-</body>
+<!DOCTYPE html>  <html lang="en">  
+<head>  
+  <meta charset="UTF-8">  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">  
+  <meta name="theme-color" content="#7b3f5b">  
+  <meta name="description" content="Petal & Vine Flower Boutique">  
+  <title>Petal & Vine | Flower Boutique</title>  
+  <link rel="stylesheet" href="style.css">  
+  <script src="script.js" defer></script>  
+</head>  
+<body>  
+  <div id="toast" class="toast"></div>    <!-- AUTHENTICATION -->    <main id="authScreen" class="auth-screen">  
+    <section class="auth-card">  
+      <div class="brand-mark">✿</div>  
+      <p class="eyebrow">FLOWER BOUTIQUE</p>  
+      <h1>Petal <span>&</span> Vine</h1>  
+      <p class="auth-intro">Thoughtful flowers for life's beautiful moments.</p>  <form id="loginForm">  
+    <h2 id="authTitle">Welcome Back</h2>  
+    <p id="authSubtitle">Sign in to continue.</p>  
+    <label for="loginUsername">Username</label>  
+    <input id="loginUsername" autocomplete="username" required>  
+    <label for="loginPassword">Password</label>  
+    <div class="password-field">  
+      <input id="loginPassword" type="password" autocomplete="current-password" required>  
+      <button type="button" class="toggle-password" data-target="loginPassword">Show</button>  
+    </div>  
+    <p id="loginMessage" class="form-message"></p>  
+    <button class="btn btn-primary full" type="submit">Log In</button>  
+    <p class="switch-text">Don't have an account? <button type="button" class="text-button" onclick="showRegister()">Create account</button></p>  
+  </form>  
+
+  <form id="registerForm" class="hidden">  
+    <h2>Create Account</h2>  
+    <p>Join Petal & Vine today.</p>  
+    <label for="registerName">Full name</label>  
+    <input id="registerName" required>  
+    <label for="registerUsername">Username</label>  
+    <input id="registerUsername" autocomplete="username" required>  
+    <label for="registerPassword">Password</label>  
+    <div class="password-field">  
+      <input id="registerPassword" type="password" autocomplete="new-password" required minlength="6">  
+      <button type="button" class="toggle-password" data-target="registerPassword">Show</button>  
+    </div>  
+    <label for="registerConfirm">Confirm password</label>  
+    <div class="password-field">  
+      <input id="registerConfirm" type="password" autocomplete="new-password" required>  
+      <button type="button" class="toggle-password" data-target="registerConfirm">Show</button>  
+    </div>  
+    <p id="registerMessage" class="form-message"></p>  
+    <button class="btn btn-primary full" type="submit">Create Account</button>  
+    <p class="switch-text">Already registered? <button type="button" class="text-button" onclick="showLogin()">Log in</button></p>  
+  </form>  
+</section>
+
+  </main>    <!-- MAIN APPLICATION -->    <div id="appScreen" class="app-screen hidden">  
+    <header class="topbar">  
+      <a class="brand" href="#" onclick="goHome();return false;">  
+        <span class="brand-icon">✿</span>  
+        <span>Petal <i>&</i> Vine<small>FLOWER BOUTIQUE</small></span>  
+      </a>  
+      <div class="topbar-right">  
+        <span id="headerUser" class="header-user"></span>  
+        <button id="logoutButton" class="btn btn-outline btn-small" type="button">Log Out</button>  
+      </div>  
+    </header>  <div class="app-layout">  
+  <aside class="sidebar">  
+    <div class="sidebar-welcome">  
+      <span class="avatar">✿</span>  
+      <div><strong id="welcomeText">Welcome</strong><small id="roleLabel">Customer</small></div>  
+    </div>  
+
+    <nav id="customerNav" class="side-nav hidden">  
+      <p class="nav-heading">CUSTOMER MENU</p>  
+      <button class="nav-link active" onclick="customerPage('shop',this)">✿ <span>Shop Flowers</span></button>  
+      <button class="nav-link" onclick="customerPage('cart',this)">🛒 <span>My Cart</span><b id="cartCount">0</b></button>  
+      <button class="nav-link" onclick="customerPage('orders',this)">▤ <span>My Orders</span></button>  
+      <button class="nav-link" onclick="customerPage('receipts',this)">▧ <span>Receipts</span></button>  
+      <button class="nav-link" onclick="customerPage('transactions',this)">₱ <span>Transactions</span></button>  
+      <button class="nav-link" onclick="customerPage('profile',this)">♙ <span>My Profile</span></button>  
+      <button class="nav-link" onclick="customerPage('about',this)">♡ <span>About Us</span></button>  
+    </nav>  
+
+    <nav id="adminNav" class="side-nav hidden">  
+      <p class="nav-heading">ADMIN MENU</p>  
+      <button class="nav-link active" onclick="adminPage('dashboard',this)">▦ <span>Dashboard</span></button>  
+      <button class="nav-link" onclick="adminPage('products',this)">✿ <span>Products</span></button>  
+      <button class="nav-link" onclick="adminPage('inventory',this)">▤ <span>Inventory</span></button>  
+      <button class="nav-link" onclick="adminPage('orders',this)">🛍 <span>Orders</span></button>  
+      <button class="nav-link" onclick="adminPage('users',this)">♙ <span>Customers</span></button>  
+      <button class="nav-link" onclick="adminPage('settings',this)">⚙ <span>Settings</span></button>  
+    </nav>  
+  </aside>  
+
+  <main class="main-content">  
+    <div class="page-heading">  
+      <div><p class="eyebrow">PETAL & VINE</p><h1 id="pageTitle">Shop Flowers</h1></div>  
+    </div>  
+
+    <!-- CUSTOMER SHOP -->  
+    <section id="customer-shop" class="page">  
+      <div class="hero-banner">  
+        <div><p class="eyebrow">MADE WITH LOVE</p><h2>Flowers that speak<br>from the heart.</h2><p>Find the perfect bouquet for every occasion.</p></div>  
+        <span class="hero-flower">💐</span>  
+      </div>  
+      <div class="section-toolbar">  
+        <div><h2>Our Flower Collection</h2><p>Choose your favorites and make someone's day.</p></div>  
+        <input id="productSearch" class="search-input" placeholder="Search flowers...">  
+      </div>  
+      <div id="shopProducts" class="product-grid"></div>  
+    </section>  
+
+    <!-- CUSTOMER CART -->  
+    <section id="customer-cart" class="page hidden">  
+      <div class="section-title"><h2>Your Shopping Cart</h2><p>Review your flowers before checkout.</p></div>  
+      <div id="cartContent"></div>  
+    </section>  
+
+    <!-- CUSTOMER ORDERS -->  
+    <section id="customer-orders" class="page hidden">  
+      <div class="section-title"><h2>My Orders</h2><p>Track your flower purchases.</p></div>  
+      <div id="customerOrders"></div>  
+    </section>  
+
+    <section id="customer-receipts" class="page hidden">  
+      <div class="section-title"><h2>My Receipts</h2><p>Your order payment records.</p></div>  
+      <div id="customerReceipts"></div>  
+    </section>  
+
+    <section id="customer-transactions" class="page hidden">  
+      <div class="section-title"><h2>Transactions</h2><p>A summary of your purchases.</p></div>  
+      <div id="customerTransactions"></div>  
+    </section>  
+
+    <section id="customer-profile" class="page hidden">  
+      <div class="section-title"><h2>My Profile</h2><p>Manage your account information.</p></div>  
+      <form id="profileForm" class="form-card">  
+        <label for="profileName">Full name</label><input id="profileName" required>  
+        <label for="profileUsername">Username</label><input id="profileUsername" required>  
+        <label for="profilePhone">Phone number</label><input id="profilePhone">  
+        <label for="profileAddress">Delivery address</label><textarea id="profileAddress" rows="3"></textarea>  
+        <label for="profilePassword">New password (leave blank to keep current)</label><input id="profilePassword" type="password" minlength="6">  
+        <p id="profileMessage" class="form-message"></p>  
+        <button class="btn btn-primary" type="submit">Save Changes</button>  
+      </form>  
+    </section>  
+
+    <section id="customer-about" class="page hidden">  
+      <div class="about-card"><span class="about-flower">🌷</span><h2>About Petal & Vine</h2><p>We believe every flower carries a feeling. Petal & Vine brings thoughtful floral arrangements to life's special moments, from celebrations to simple everyday surprises.</p><p>Thank you for letting us be part of your beautiful moments.</p></div>  
+    </section>  
+
+    <!-- ADMIN DASHBOARD -->  
+    <section id="admin-dashboard" class="page hidden">  
+      <div class="section-title"><h2>Store Overview</h2><p>Here's what's happening in your boutique.</p></div>  
+      <div id="dashboardStats" class="stats-grid"></div>  
+      <div class="section-title"><h2>Recent Orders</h2></div>  
+      <div id="recentOrders"></div>  
+    </section>  
+
+    <!-- ADMIN PRODUCTS -->  
+    <section id="admin-products" class="page hidden">  
+      <div class="section-toolbar">  
+        <div><h2>Manage Products</h2><p>Add, update, or remove flower products.</p></div>  
+        <button class="btn btn-primary" onclick="openProductModal()">＋ Add Product</button>  
+      </div>  
+      <input id="adminProductSearch" class="search-input" placeholder="Search products...">  
+      <div id="adminProducts" class="admin-list"></div>  
+    </section>  
+
+    <section id="admin-inventory" class="page hidden">  
+      <div class="section-title"><h2>Inventory</h2><p>Monitor available product stocks.</p></div>  
+      <div id="inventoryList"></div>  
+    </section>  
+
+    <section id="admin-orders" class="page hidden">  
+      <div class="section-title"><h2>Manage Orders</h2><p>Review orders and update their status.</p></div>  
+      <div id="adminOrders"></div>  
+    </section>  
+
+    <section id="admin-users" class="page hidden">  
+      <div class="section-title"><h2>Customer Accounts</h2><p>View registered customers.</p></div>  
+      <div id="adminUsers"></div>  
+    </section>  
+
+    <section id="admin-settings" class="page hidden">  
+      <div class="section-title"><h2>Admin Settings</h2><p>Update your admin login details.</p></div>  
+      <form id="settingsForm" class="form-card">  
+        <label for="settingsUsername">Admin username</label><input id="settingsUsername" required>  
+        <label for="settingsPassword">New password</label><input id="settingsPassword" type="password" minlength="6">  
+        <label for="settingsConfirm">Confirm new password</label><input id="settingsConfirm" type="password">  
+        <p class="muted">Leave both password fields blank to keep your current password.</p>  
+        <p id="settingsMessage" class="form-message"></p>  
+        <button class="btn btn-primary" type="submit">Save Settings</button>  
+      </form>  
+    </section>  
+  </main>  
+</div>
+
+  </div>    <!-- PRODUCT MODAL -->    <div id="productModal" class="modal hidden">  
+    <div class="modal-card">  
+      <button class="modal-close" onclick="closeModal('productModal')">×</button>  
+      <h2 id="productModalTitle">Add Product</h2>  
+      <form id="productForm">  
+        <input id="productId" type="hidden">  
+        <label for="productName">Product name</label><input id="productName" required>  
+        <label for="productCategory">Category</label>  
+        <select id="productCategory"><option>Rose</option><option>Tulip</option><option>Sunflower</option><option>Mixed Bouquet</option><option>Other</option></select>  
+        <label for="productDescription">Description</label><textarea id="productDescription" rows="2"></textarea>  
+        <div class="form-row">  
+          <div><label for="productPrice">Price (₱)</label><input id="productPrice" type="number" min="0" step="0.01" required></div>  
+          <div><label for="productStock">Stock</label><input id="productStock" type="number" min="0" step="1" required></div>  
+        </div>  
+        <label for="productImage">Image URL or emoji</label><input id="productImage" placeholder="🌹 or https://...">  
+        <label for="productImageFile">Or upload an image</label><input id="productImageFile" type="file" accept="image/*">  
+        <img id="productImagePreview" class="image-preview hidden" alt="Product preview">  
+        <button class="btn btn-primary full" type="submit">Save Product</button>  
+      </form>  
+    </div>  
+  </div>    <!-- CHECKOUT MODAL -->    <div id="checkoutModal" class="modal hidden">  
+    <div class="modal-card">  
+      <button class="modal-close" onclick="closeModal('checkoutModal')">×</button>  
+      <h2>Checkout</h2>  
+      <p class="muted">Confirm your delivery details.</p>  
+      <div id="checkoutSummary"></div>  
+      <form id="checkoutForm">  
+        <label for="checkoutName">Full name</label><input id="checkoutName" required>  
+        <label for="checkoutPhone">Phone number</label><input id="checkoutPhone" required>  
+        <label for="checkoutAddress">Delivery address</label><textarea id="checkoutAddress" rows="3" required></textarea>  
+        <div class="payment-note"><strong>Payment method</strong><p>Cash on Delivery (COD)</p></div>  
+        <button class="btn btn-primary full" type="submit">Place Order</button>  
+      </form>  
+    </div>  
+  </div>    <!-- RECEIPT MODAL -->    <div id="receiptModal" class="modal hidden">  
+    <div class="modal-card receipt-card">  
+      <button class="modal-close" onclick="closeModal('receiptModal')">×</button>  
+      <div id="receiptContent"></div>  
+      <button class="btn btn-primary full" onclick="window.print()">Print Receipt</button>  
+    </div>  
+  </div>  
+</body>  
 </html>
